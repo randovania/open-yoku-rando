@@ -67,6 +67,32 @@ rolls. Afterwards the DLL writes every entry's item, the starting items, fruit a
 `<game>/open-yoku-rando/seed.txt`. Nothing reads the entries earlier, because a pickup's level number is set right
 before the loader runs.
 
+## Warp to Start
+
+The save manager at `globals+0x2590` holds the save document (`+0x50`) and the `_global` fields `level` (`+0x28`,
+i.e. `globals+0x25b8`) and `spawner` (`+0x48`). When a level starts, the ball spawner search (0x259bd0) takes the
+object whose id is `spawner` if the level is the saved `level`, otherwise the level's default spawner.
+
+The pause menu builder (0x2a49d0) adds its entries to the menu node at `menu+0x70` through the node's vtable
+(`+0x38` entry, `+0x40` child node, `+0x48` "Are you sure?" with Yes and No, as the slot menu's "Delete" uses it), and
+installs 0x2ac6b0 as the command handler, `(menu, picked node)` with the command as a `std::string` at `node+0x70`.
+"Restart from Checkpoint" reloads the slot's file and ends in `save_apply` (0x269be0): `save_load` reads `_global`
+back from the document, then the level it names is loaded; afterwards the menu closes (0x2a4de0) and the game
+unpauses (0x236f40).
+
+The DLL adds "Warp to Start" before "Exit to Main Menu" in a Randovania save. Picked and confirmed, it runs
+`checkpoint_save` (0x26b740, with no spawner: it stores the running levels and writes `_global`), sets `level` and
+`spawner` to the seed's start location, writes `_global` again (0x26baf0) and calls `save_apply`. The game continues
+from what was just saved, so inventory, quests and collected locations stay; only the position changes. It refuses
+while a level load is pending (`globals+0x3630`) or the game saves nothing (`globals+0x1f06c` bit 0). The location
+comes from the seed file's `start_location` and is kept in `quests_completed` as
+`@open-yoku-rando:start:<level>:<spawner>`; the entry only appears in a save that has it.
+
+A new game begins at the same location. The start screen's script opens the first level with
+`loadLevel("intro_landing")`, and that native's only `level_load` call (0x2024bd) is redirected: for a new randomizer
+game (mode 3, no randomizer entries yet) of the seed, `level` and `spawner` are set to its start location and that
+level is loaded instead.
+
 ## Beacons and the ending
 
 The 8 beacons (`special_collectible_beacon`) are lit by `beacon_use` (0x216450, vtable slot 0x4b5f50): with fewer
@@ -109,6 +135,9 @@ the `unlockAchievement` registration in `script_api_init` at a wrapper that adds
 | `lua_setglobal` / `lua_pushstring` | 0xcb180 / 0xcae70 | |
 | randomizer loader | 0x168da0 | `(RandomizerState*, level data, bool dump)` |
 | slot menu builder | 0x2add70 | |
+| pause menu builder / command handler | 0x2a49d0 / 0x2ac6b0 | the handler is shared with the main menu |
+| `checkpoint_save` / `save_globals` / `save_apply` | 0x26b740 / 0x26baf0 / 0x269be0 | see "Warp to Start" |
+| `ui_text` | 0x27cbb0 | `(globals+0x8fd0, const char** out, 0, key)`, the translation first, then the English UI text |
 
 Globals offsets: level name 0x25b8, frame counter 0x2028, inventory 0x29e8, fruit 0x2a30 / total 0x2a34, wallet size
 0x2a10, ability flags 0x2a00, quests completed 0x2688, seed 0x35d0, difficulty 0x35d4, randomizer entries 0x35d8,

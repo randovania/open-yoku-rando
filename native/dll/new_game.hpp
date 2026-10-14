@@ -28,6 +28,10 @@ const std::vector<std::pair<std::string, std::string>>& texts();
 // The hash of a seed started from this game folder, by seed number; for slot labels.
 const std::string* hash_for_seed(uint32_t seed);
 
+// A new game always opens `level` ("intro_landing", from the start screen's script). For a new game of the seed it
+// returns the seed's start level instead and sets the ball to appear at the start spawner; otherwise `level`.
+const char* first_level(const char* level);
+
 // Around the randomizer loader. before_loader returns whether a new Randovania game is being set up.
 bool before_loader(void* randomizer_state);
 void after_loader(void* randomizer_state, bool new_game);

@@ -98,6 +98,29 @@ struct Build {
     uintptr_t menu_skip_to;
     // "slot_newrandom_"
     uintptr_t menu_newrandom_string;
+
+    // The pause menu. void(Menu*, MenuNode* picked): runs the picked entry's command; the main menu uses it too.
+    uintptr_t pause_menu_command;
+    // lea rax, [pause_menu_command] in the pause menu builder
+    uintptr_t pause_menu_command_lea;
+    // mov rcx, [globals] that starts the "Exit to Main Menu" entry, right after "Restart from Checkpoint"
+    uintptr_t pause_menu_exit_entry;
+    // void(Menu*) and void(Globals*): what the menu runs after a picked "Restart from Checkpoint"
+    uintptr_t pause_menu_close;
+    uintptr_t unpause;
+    // const char**(globals+0x8fd0, const char** out, int32 language, const char* key): the UI text of key
+    uintptr_t ui_text;
+    // void(SaveManager*, Object* spawner): saves the game at that spawner, or with null at the running level
+    uintptr_t checkpoint_save;
+    // void(SaveManager*): writes the globals into the save document and queues the file write
+    uintptr_t save_globals;
+    // bool(SaveManager*, bool): reads the globals back from the save document and loads the level it names;
+    // "Continue" and "Restart from Checkpoint" end here
+    uintptr_t save_apply;
+    // void(globals+0x3630, const char* level, bool, bool): loads a level
+    uintptr_t level_load;
+    // its call in the loadLevel native, which only the start screen uses: loadLevel("intro_landing") for a new game
+    uintptr_t load_level_native_call;
 };
 
 inline constexpr uintptr_t check_byte = 0x203154;
@@ -149,6 +172,17 @@ inline constexpr Build kEpic{
     .menu_skip_from = 0x2ae1a6,
     .menu_skip_to = 0x2aebfb,
     .menu_newrandom_string = 0x4c0700,
+    .pause_menu_command = 0x2ac6b0,
+    .pause_menu_command_lea = 0x2a4d8a,
+    .pause_menu_exit_entry = 0x2a4cec,
+    .pause_menu_close = 0x2a4de0,
+    .unpause = 0x236f40,
+    .ui_text = 0x27cbb0,
+    .checkpoint_save = 0x26b740,
+    .save_globals = 0x26baf0,
+    .save_apply = 0x269be0,
+    .level_load = 0x2608c0,
+    .load_level_native_call = 0x2024bd,
 };
 
 // 7,423,488 bytes. Game code is Epic's shifted by -0x750, the Lua library is where Epic has it.
@@ -198,6 +232,17 @@ inline constexpr Build kGog{
     .menu_skip_from = 0x2ada36,
     .menu_skip_to = 0x2ae48b,
     .menu_newrandom_string = 0x4bf4e0,
+    .pause_menu_command = 0x2abf40,
+    .pause_menu_command_lea = 0x2a463a,
+    .pause_menu_exit_entry = 0x2a459c,
+    .pause_menu_close = 0x2a4690,
+    .unpause = 0x2367f0,
+    .ui_text = 0x27c460,
+    .checkpoint_save = 0x26aff0,
+    .save_globals = 0x26b3a0,
+    .save_apply = 0x269490,
+    .level_load = 0x260170,
+    .load_level_native_call = 0x201d6d,
 };
 
 // 7,664,312 bytes, wrapped in SteamStub (.text encrypted on disk). Mapped on the decrypted image: game code shifted
@@ -248,6 +293,17 @@ inline constexpr Build kSteam{
     .menu_skip_from = 0x2ae866,
     .menu_skip_to = 0x2af2bb,
     .menu_newrandom_string = 0x4c0850,
+    .pause_menu_command = 0x2acd70,
+    .pause_menu_command_lea = 0x2a544a,
+    .pause_menu_exit_entry = 0x2a53ac,
+    .pause_menu_close = 0x2a54a0,
+    .unpause = 0x237640,
+    .ui_text = 0x27d270,
+    .checkpoint_save = 0x26be00,
+    .save_globals = 0x26c1b0,
+    .save_apply = 0x26a2a0,
+    .level_load = 0x260f80,
+    .load_level_native_call = 0x202bbd,
 };
 
 inline constexpr std::array<const Build*, 3> kBuilds{&kEpic, &kGog, &kSteam};

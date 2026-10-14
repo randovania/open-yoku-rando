@@ -20,7 +20,7 @@ struct Prologue {
 };
 
 // First bytes of every game function the DLL calls or hooks; the same in all builds.
-constexpr std::array<Prologue, 21> kPrologues{{
+constexpr std::array<Prologue, 29> kPrologues{{
     {"randomizer_loader", &Build::randomizer_loader, {0x48, 0x89, 0x5c, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55}},
     {"inventory_add", &Build::inventory_add, {0x48, 0x89, 0x5c, 0x24, 0x18, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55}},
     {"inventory_remove", &Build::inventory_remove, {0x40, 0x55, 0x56, 0x41, 0x57, 0x48, 0x81, 0xec, 0x40, 0x07, 0x00, 0x00}},
@@ -42,6 +42,14 @@ constexpr std::array<Prologue, 21> kPrologues{{
     {"mark_collected", &Build::mark_collected, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89}},
     {"item_rule_action", &Build::item_rule_action, {0x48, 0x89, 0x5c, 0x24, 0x10, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55}},
     {"beacon_use", &Build::beacon_use, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0x48}},
+    {"pause_menu_command", &Build::pause_menu_command, {0x40, 0x55, 0x53, 0x57, 0x41, 0x55, 0x48, 0x8d, 0xac, 0x24, 0x98, 0xfd}},
+    {"pause_menu_close", &Build::pause_menu_close, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x50, 0x0f, 0x57}},
+    {"unpause", &Build::unpause, {0x40, 0x53, 0x48, 0x83, 0xec, 0x40, 0x80, 0xb9, 0xc4, 0x93, 0x00, 0x00}},
+    {"ui_text", &Build::ui_text, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89}},
+    {"checkpoint_save", &Build::checkpoint_save, {0x48, 0x89, 0x5c, 0x24, 0x10, 0x57, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b}},
+    {"save_globals", &Build::save_globals, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x7c, 0x24, 0x10, 0x55, 0x48}},
+    {"level_load", &Build::level_load, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89}},
+    {"save_apply", &Build::save_apply, {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x48, 0x89}},
 }};
 
 // The instructions the struct offsets were read from (docs/multiworld-state.md), so a build with another layout is
@@ -74,6 +82,22 @@ static_assert(std::ranges::none_of(kAnchors, [](const Anchor& anchor) { return a
 
 // mov rcx, [rip + globals]; add rcx, 0x8fd0 - how the menu builder starts every entry.
 constexpr std::array<int16_t, 14> kMenuEntryStart{0x48, 0x8b, 0x0d, -1, -1, -1, -1, 0x48, 0x81, 0xc1, 0xd0, 0x8f, 0x00, 0x00};
+
+// Instructions at fixed offsets into a function, for the globals the warp reads and writes.
+struct Inner {
+    const char* what;
+    uintptr_t Build::* function;
+    uintptr_t offset;
+    std::array<int16_t, 8> bytes;
+};
+constexpr std::array<Inner, 4> kInner{{
+    // save_load: lea r8, [rcx + 0x28] before "level"; lea r8, [rdi + 0x48] before "spawner" (rcx = rdi = save manager)
+    {"the saved level at save manager+0x28", &Build::save_load, 0x12, {0x4c, 0x8d, 0x41, 0x28, -1, -1, -1, -1}},
+    {"the saved spawner at save manager+0x48", &Build::save_load, 0x2b, {0x4c, 0x8d, 0x47, 0x48, -1, -1, -1, -1}},
+    // checkpoint_save: test byte [rcx + 0x1f06c], 1; cmp qword [rcx + 0x3630], 0 (rcx = globals)
+    {"the no-save flag at globals+0x1f06c", &Build::checkpoint_save, 0x17, {0xf6, 0x81, 0x6c, 0xf0, 0x01, 0x00, 0x01, -1}},
+    {"the pending level load at globals+0x3630", &Build::checkpoint_save, 0xad, {0x48, 0x83, 0xb9, 0x30, 0x36, 0x00, 0x00, 0x00}},
+}};
 
 // mov r9d, [r14 + 0xc]; lea rdx, [rip + fmt] - the seed and the format before the slot label's sprintf.
 constexpr std::array<int16_t, 7> kSlotLabelSeed{0x45, 0x8b, 0x4e, 0x0c, 0x48, 0x8d, 0x15};
@@ -136,6 +160,11 @@ std::string check_code(const Build& b) {
             return std::format("{} build: the code at {:#x} that proves {} has unexpected bytes", b.name, b.*anchor.rva, anchor.what);
         }
     }
+    for (const Inner& inner : kInner) {
+        if (!matches(b.*inner.function + inner.offset, inner.bytes)) {
+            return std::format("{} build: the code at {:#x} that proves {} has unexpected bytes", b.name, b.*inner.function + inner.offset, inner.what);
+        }
+    }
     uintptr_t state = b.anchor_randomizer_state;
     if (state + 7 + read<int32_t>(state + 3) != b.globals_ptr || call_target(state + 0x14) != b.mark_collected) {
         return std::format("{} build: bubble_pickup does not reach mark_collected through globals+0x3550", b.name);
@@ -160,6 +189,9 @@ std::string check_code(const Build& b) {
         call_target(b.slot_label_format_call) == 0) {
         return std::format("{} build: the slot label code at {:#x} is not what the DLL patches", b.name, b.slot_label_format_call);
     }
+    if (call_target(b.load_level_native_call) != b.level_load) {
+        return std::format("{} build: no call to level_load at {:#x}", b.name, b.load_level_native_call);
+    }
     if (call_target(b.randomizer_loader_call) != b.randomizer_loader) {
         return std::format("{} build: no call to the randomizer loader at {:#x}", b.name, b.randomizer_loader_call);
     }
@@ -175,6 +207,12 @@ std::string check_code(const Build& b) {
         !menu_entry_start(b.menu_skip_to) || !lea_string(b.menu_skip_to + 0xe, 0x0d, "ui_back") ||
         std::strcmp(reinterpret_cast<const char*>(g_base + b.menu_newrandom_string), "slot_newrandom_") != 0) {
         return std::format("{} build: the slot menu code is not what the DLL patches", b.name);
+    }
+    // The pause menu patch replaces the mov before "Exit to Main Menu" and the lea of the command handler.
+    uintptr_t handler_lea = b.pause_menu_command_lea;
+    if (!menu_entry_start(b.pause_menu_exit_entry) || !lea_string(b.pause_menu_exit_entry + 0xe, 0x0d, "ui_exit_to_menu") || g_base[handler_lea] != 0x48 ||
+        g_base[handler_lea + 1] != 0x8d || g_base[handler_lea + 2] != 0x05 || handler_lea + 7 + read<int32_t>(handler_lea + 3) != b.pause_menu_command) {
+        return std::format("{} build: the pause menu code is not what the DLL patches", b.name);
     }
     for (uintptr_t address = b.code_cave; address < b.code_cave_end; ++address) {
         if (g_base[address] != 0) {

@@ -2,6 +2,7 @@
 
 #include "game.hpp"
 #include "log.hpp"
+#include "warp.hpp"
 
 #include <windows.h>
 
@@ -39,6 +40,7 @@ struct Seed {
     int32_t fruit = 0;
     std::vector<std::pair<std::string, int32_t>> starting_items;
     std::map<uint32_t, std::string> placement;  // location id -> game item id
+    warp::Location start_location;
 };
 
 // Read by before_loader and used by after_loader of the same call.
@@ -76,6 +78,7 @@ std::vector<std::string_view> split_tabs(std::string_view line) {
 //   seed        <number shown as the save's seed>
 //   fruit       <starting fruit>
 //   start       <item>  <count>        (any number of lines)
+//   start_location  <level>  <spawner>  (where a new game begins)
 //   place       <location id>  <item>  (one line per location)
 // Returns an error message, empty on success.
 std::string read_seed(const fs::path& path, Seed& seed) {
@@ -113,6 +116,9 @@ std::string read_seed(const fs::path& path, Seed& seed) {
             int32_t count = 0;
             ok = !f[1].empty() && parse_number(f[2], count) && count > 0;
             seed.starting_items.emplace_back(std::string(f[1]), count);
+        } else if (f[0] == "start_location" && f.size() == 3) {
+            seed.start_location.level = f[1];
+            ok = !seed.start_location.level.empty() && parse_number(f[2], seed.start_location.spawner);
         } else if (f[0] == "place" && f.size() == 3) {
             uint32_t location = 0;
             ok = parse_number(f[1], location) && !f[2].empty() && seed.placement.emplace(location, std::string(f[2])).second;
@@ -124,8 +130,8 @@ std::string read_seed(const fs::path& path, Seed& seed) {
     if (format != kSeedFormat) {
         return std::format("{} has format {}, the DLL reads format {}", path.string(), format, kSeedFormat);
     }
-    if (seed.identifier.empty() || seed.placement.empty()) {
-        return std::format("{} has no identifier or no placement", path.string());
+    if (seed.identifier.empty() || seed.start_location.level.empty() || seed.placement.empty()) {
+        return std::format("{} has no identifier, start location or placement", path.string());
     }
     return {};
 }
@@ -227,6 +233,26 @@ const std::string& menu_text() {
     return g_menu_text;
 }
 
+const char* first_level(const char* level) {
+    static std::string start_level;
+    uint8_t* globals = game::globals();
+    if (!globals || !level || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer ||
+        !game::field<std::vector<game::RandomizerEntry>>(globals, game::globals_offset::randomizer_entries).empty()) {
+        return level;
+    }
+    Seed seed;
+    if (!read_seed(seed_path(), seed).empty()) {
+        return level;
+    }
+    const warp::Location& start = seed.start_location;
+
+    game::field<std::string>(globals, game::globals_offset::level) = start.level;
+    game::field<int32_t>(globals, game::globals_offset::spawner) = start.spawner;
+    start_level = start.level;
+    log::info("new game of seed {} starts at {} spawner {} instead of {}", seed.identifier, start.level, start.spawner, level);
+    return start_level.c_str();
+}
+
 bool before_loader(void* randomizer_state) {
     g_seed.reset();
     if (game::field<int32_t>(game::globals(), game::globals_offset::game_mode) != kGameModeRandomizer) {
@@ -286,6 +312,7 @@ void after_loader(void* randomizer_state, bool new_game) {
         if (!seed.uuid.empty()) {
             quests->push_back(std::string(game::kLayoutUuidPrefix) + seed.uuid);
         }
+        quests->push_back(warp::marker(seed.start_location));
     }
     remember_seed(seed.seed, shown_hash(seed));
     log::info("started Randovania seed {} (seed {}) on thread {}: {} of {} locations placed, {} starting items, {} fruit", seed.identifier, seed.seed,

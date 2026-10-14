@@ -4,6 +4,10 @@
     "save": {
         "seed": 1
     },
+    "starting_location": {
+        "level": "intro_landing",
+        "spawner": -1
+    },
     "pickups": [
         {
             "location": "intro_landing_upper:5394",

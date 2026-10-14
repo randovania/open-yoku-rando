@@ -35,6 +35,7 @@ add_library(open_yoku_rando SHARED
     dll/progressive.cpp
     dll/remote_api.cpp
     dll/verify.cpp
+    dll/warp.cpp
     third_party/imgui/imgui.cpp
     third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp

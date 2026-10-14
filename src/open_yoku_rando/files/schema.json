@@ -64,6 +64,27 @@
             "default": 0,
             "minimum": 0
         },
+        "starting_location": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Where the seed starts: a new game begins here",
+            "properties": {
+                "level": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+$",
+                    "description": "The level's folder name under processed/levels."
+                },
+                "spawner": {
+                    "type": "integer",
+                    "minimum": -1,
+                    "description": "Object id of a ball_spawner or special_checkpoint in that level; -1 for the level's default ball spawner."
+                }
+            },
+            "required": [
+                "level",
+                "spawner"
+            ]
+        },
         "required_beacons": {
             "type": "integer",
             "description": "Beacons that must be lit, 10 Wickerlings each, before Nim starts the ceremony that leads to the final boss. 0 keeps the ceremony as it is.",
@@ -75,6 +96,7 @@
     "required": [
         "configuration_identifier",
         "save",
+        "starting_location",
         "pickups"
     ],
     "$defs": {

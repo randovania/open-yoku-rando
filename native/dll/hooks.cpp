@@ -5,6 +5,7 @@
 #include "log.hpp"
 #include "lua_bridge.hpp"
 #include "new_game.hpp"
+#include "warp.hpp"
 
 #include <windows.h>
 
@@ -35,6 +36,8 @@ GameFn g_randomizer_loader = nullptr;
 GameFn g_dialog_init = nullptr;
 GameFn g_slot_label_format = nullptr;
 GameFn g_beacon_use = nullptr;
+GameFn g_pause_menu_command = nullptr;
+GameFn g_level_load = nullptr;
 
 uint64_t hook_tick(void* a, void* b, void* c, void* d) {
     bridge::on_tick();
@@ -64,6 +67,25 @@ uint64_t hook_beacon_use(void* beacon, void* b, void* c, void* d) {
     uint64_t result = g_beacon_use(beacon, b, c, d);
     goal::on_beacon_used(game::item_count("collectible") < before);
     return result;
+}
+
+// The pause and main menu's command handler, for the pause menu's "Warp to Start".
+uint64_t hook_pause_menu_command(void* menu, void* picked, void* c, void* d) {
+    if (warp::on_command(menu, picked)) {
+        return 0;
+    }
+    return g_pause_menu_command(menu, picked, c, d);
+}
+
+// Called from the pause menu builder by the stub patch_pause_menu places.
+void hook_pause_menu_entries(void* menu) {
+    warp::add_menu_entry(menu);
+}
+
+// The loadLevel native's level_load: a new game of a seed with a start location begins there instead.
+uint64_t hook_load_level_native(void* loader, void* level, void* c, void* d) {
+    const char* first = new_game::first_level(static_cast<const char*>(level));
+    return g_level_load(loader, const_cast<char*>(first), c, d);
 }
 
 uint64_t hook_randomizer_loader(void* state, void* level, void* dump, void* d) {
@@ -181,7 +203,10 @@ class CodeCave {
 
     // `prefix`, then a jump to target.
     uint8_t* run_then_jump(std::initializer_list<uint8_t> prefix, void* target) {
-        std::vector<uint8_t> bytes(prefix);
+        return run_then_jump(std::vector<uint8_t>(prefix), target);
+    }
+
+    uint8_t* run_then_jump(std::vector<uint8_t> bytes, void* target) {
         auto jump = jump_bytes(target);
         bytes.insert(bytes.end(), jump.begin(), jump.end());
         return place(bytes);
@@ -255,6 +280,40 @@ std::string patch_menu(CodeCave& cave) {
     return {};
 }
 
+void append_address(std::vector<uint8_t>& bytes, const void* address) {
+    auto value = reinterpret_cast<uintptr_t>(address);
+    auto* first = reinterpret_cast<const uint8_t*>(&value);
+    bytes.insert(bytes.end(), first, first + sizeof(value));
+}
+
+// "Warp to Start": the builder calls hook_pause_menu_entries right before its "Exit to Main Menu" entry, and the
+// command handler it installs is pointed at hook_pause_menu_command.
+std::string patch_pause_menu(CodeCave& cave) {
+    const game::Build& build = game::build();
+    uint8_t* base = game::base();
+    // The menu is in rdi; the stack is 16-byte aligned there. Afterwards the replaced
+    // `mov rcx, [rip + globals]` runs as mov rcx, imm64; mov rcx, [rcx].
+    std::vector<uint8_t> stub{0x48, 0x83, 0xec, 0x20, 0x48, 0x89, 0xf9, 0x48, 0xb8};  // sub rsp, 0x20; mov rcx, rdi; mov rax, imm64
+    append_address(stub, reinterpret_cast<void*>(&hook_pause_menu_entries));
+    stub.insert(stub.end(), {0xff, 0xd0, 0x48, 0x83, 0xc4, 0x20, 0x48, 0xb9});  // call rax; add rsp, 0x20; mov rcx, imm64
+    append_address(stub, base + build.globals_ptr);
+    stub.insert(stub.end(), {0x48, 0x8b, 0x09});  // mov rcx, [rcx]
+    uint8_t* entries = cave.run_then_jump(std::move(stub), base + build.pause_menu_exit_entry + 7);
+    if (!entries) {
+        return "cannot write to the code cave";
+    }
+    std::array<uint8_t, 7> jump{0xe9, 0, 0, 0, 0, 0x90, 0x90};
+    if (!patch(base + build.pause_menu_exit_entry, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
+        !retarget(build.pause_menu_exit_entry + 1, build.pause_menu_exit_entry + 5, entries)) {
+        return "cannot add the Warp to Start entry to the pause menu";
+    }
+    g_pause_menu_command = reinterpret_cast<GameFn>(base + build.pause_menu_command);
+    if (!retarget(build.pause_menu_command_lea + 3, build.pause_menu_command_lea + 7, cave.jump_to(reinterpret_cast<void*>(&hook_pause_menu_command)))) {
+        return "cannot point the pause menu at the DLL's command handler";
+    }
+    return {};
+}
+
 }  // namespace
 
 std::string install() {
@@ -264,6 +323,7 @@ std::string install() {
     g_randomizer_loader = reinterpret_cast<GameFn>(base + game::build().randomizer_loader);
     g_dialog_init = reinterpret_cast<GameFn>(base + game::build().dialog_init);
     g_beacon_use = reinterpret_cast<GameFn>(base + game::build().beacon_use);
+    g_level_load = reinterpret_cast<GameFn>(base + game::build().level_load);
 
     // First, so as few files as possible are opened before it.
     g_fopen = reinterpret_cast<FopenFn>(hook_import("fopen", reinterpret_cast<void*>(&hook_fopen)));
@@ -275,6 +335,9 @@ std::string install() {
     CodeCave cave;
     if (!redirect_call(game::build().randomizer_loader_call, cave.jump_to(&hook_randomizer_loader))) {
         return std::format("cannot redirect the call at {:#x}", game::build().randomizer_loader_call);
+    }
+    if (!redirect_call(game::build().load_level_native_call, cave.jump_to(&hook_load_level_native))) {
+        return std::format("cannot redirect the call at {:#x}", game::build().load_level_native_call);
     }
     // The original sprintf, read before the call is redirected.
     uintptr_t label_call = game::build().slot_label_format_call;
@@ -288,6 +351,9 @@ std::string install() {
         return std::format("cannot redirect the call at {:#x}", game::build().pickup_dialog_init_call);
     }
     if (std::string error = patch_menu(cave); !error.empty()) {
+        return error;
+    }
+    if (std::string error = patch_pause_menu(cave); !error.empty()) {
         return error;
     }
     // Every scripted object's state gets the wrapped unlockAchievement from here on.

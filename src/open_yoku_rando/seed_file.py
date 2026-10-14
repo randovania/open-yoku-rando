@@ -21,7 +21,8 @@ def seed_path(game_path: Path) -> Path:
 
 def build(configuration: dict) -> str:
     """
-    One tab-separated record per line: format, identifier, uuid, hash, seed, fruit, then `start` and `place` lines.
+    One tab-separated record per line: format, identifier, uuid, hash, seed, fruit, start_location, then `start` and
+    `place` lines.
     """
     location_ids = {location.spawn_id: location.id for location in load_locations()}
     lines = [
@@ -37,6 +38,8 @@ def build(configuration: dict) -> str:
         f"seed\t{configuration['save']['seed']}",
         f"fruit\t{configuration['starting_fruit']}",
     ]
+    location = configuration["starting_location"]
+    lines.append(f"start_location\t{location['level']}\t{location['spawner']}")
     for item, quantity in configuration["starting_items"].items():
         lines.append(f"start\t{item}\t{quantity}")
     for pickup in configuration["pickups"]:

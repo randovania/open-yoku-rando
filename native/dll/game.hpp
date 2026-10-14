@@ -14,7 +14,13 @@ namespace oyr::game {
 
 // Offsets into the object behind Build::globals_ptr; the same in all builds.
 namespace globals_offset {
-inline constexpr uintptr_t level = 0x25b8;      // std::string; "_start_screen" in the main menu
+// The save manager: the save document and the `_global` fields the game keeps outside its own objects.
+inline constexpr uintptr_t save_manager = 0x2590;
+inline constexpr uintptr_t level = 0x25b8;      // std::string, save_manager+0x28; "_start_screen" in the main menu
+inline constexpr uintptr_t spawner = 0x25d8;    // int32, save_manager+0x48: object id the ball starts at in `level`
+inline constexpr uintptr_t level_loading = 0x3630;  // non-null while a level load is pending
+inline constexpr uintptr_t save_flags = 0x1f06c;    // bit 0: the game saves nothing
+inline constexpr uintptr_t ui_texts = 0x8fd0;       // what ui_text looks keys up in
 inline constexpr uintptr_t inventory = 0x29e8;  // std::vector<InventoryItem>
 // std::vector<std::string>; the game keeps entries it does not know, which is how the patcher marks a save.
 inline constexpr uintptr_t quests_completed = 0x2688;
