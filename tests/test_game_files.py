@@ -1,8 +1,10 @@
+import struct
 import zlib
 
 import pytest
 
-from open_yoku_rando import game_files
+from open_yoku_rando import game_files, sim_texture
+from tests import test_sim_texture
 
 TARGET = f"{game_files.ITEMS_FOLDER}/{game_files.NOTHING_ITEM_ID}_x102.sim"
 TEXTS = game_files.TEXTS_PATH
@@ -11,8 +13,12 @@ PROXY = "xinput9_1_0.dll"
 GAME_STRINGS = "processed/text/dialog_en.strings"
 
 
-def default_models() -> dict[str, str]:
-    return {game_files.NOTHING_ITEM_ID: game_files.DEFAULT_MODEL}
+def shipped_model():
+    return game_files.installed_file_source(f"items/{game_files.DEFAULT_MODEL}_x102.sim")
+
+
+def default_models() -> dict[str, bytes]:
+    return {game_files.NOTHING_ITEM_ID: shipped_bytes()}
 
 
 def shipped_bytes() -> bytes:
@@ -61,6 +67,58 @@ def test_install_changes_no_file_of_the_game(fake_game_path):
 
     assert game_files_snapshot(fake_game_path) == before
     assert not fake_game_path.joinpath("processed", "items").exists()
+
+
+def test_the_default_model_is_the_shipped_icon(fake_game_path):
+    assert game_files.model_source(fake_game_path, game_files.DEFAULT_MODEL) == shipped_model()
+
+
+@pytest.mark.parametrize(
+    ("model", "relative"),
+    [
+        ("toolbox", "processed/items/toolbox"),
+        ("abilities/dive", "processed/items/abilities/dive"),
+        ("wickerling", "processed/items/collectible"),
+        ("reward_fruit_big", "processed/pickups/fruit_large"),
+        ("reward_fruit_medium", "processed/pickups/fruit_medium"),
+    ],
+)
+def test_a_model_comes_from_the_game_install(fake_game_path, model, relative):
+    add_game_model(fake_game_path, relative)
+
+    assert game_files.model_source(fake_game_path, model) == fake_game_path.joinpath(f"{relative}_x102.sim")
+
+
+def test_a_model_missing_from_the_install_is_an_error(fake_game_path):
+    with pytest.raises(ValueError, match="has no model for 'toolbox'"):
+        game_files.model_source(fake_game_path, "toolbox")
+
+
+def test_the_wickerling_model_is_widened(fake_game_path):
+    path = fake_game_path.joinpath("processed/items/collectible_x102.sim")
+    path.parent.mkdir(parents=True)
+    path.write_bytes(test_sim_texture.make_sim(8, 40))
+
+    data = game_files.model_data(fake_game_path, "wickerling")
+
+    assert data == sim_texture.widen_to_square(path.read_bytes())
+    assert struct.unpack_from("<3I", data, 4)[1:] == (40, 40)
+
+
+def test_install_copies_a_game_model_under_its_id(fake_game_path):
+    data = add_game_model(fake_game_path, "processed/items/abilities/dive")
+    before = game_files_snapshot(fake_game_path)
+    models = {
+        **default_models(),
+        "nothing_abilities_dive": game_files.model_data(fake_game_path, "abilities/dive"),
+    }
+
+    install = game_files.install_files(fake_game_path, models, {})
+
+    target = f"{game_files.ITEMS_FOLDER}/nothing_abilities_dive_x102.sim"
+    assert target in install.written
+    assert fake_game_path.joinpath(target).read_bytes() == data
+    assert game_files_snapshot(fake_game_path) == before
 
 
 def test_install_writes_the_texts(fake_game_path):

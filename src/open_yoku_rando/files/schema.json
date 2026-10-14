@@ -95,9 +95,8 @@
                     "description": "What the pickup dialog says at this location. A \"nothing\" without one says \"You found Nothing!\"; any other item without one shows the game's own text. Shown by the open-yoku-rando DLL."
                 },
                 "model": {
-                    "type": "string",
                     "description": "Which model the bubble shows. Only for a \"nothing\" pickup; every other item brings its own.",
-                    "pattern": "^[a-z][a-z0-9_]*$"
+                    "$ref": "#/$defs/item_id"
                 }
             },
             "required": [

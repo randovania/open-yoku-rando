@@ -30,17 +30,11 @@ def validate(configuration: dict) -> None:
     missing = [location.spawn_id for location in load_locations() if location.spawn_id not in seen]
 
     # `model` only means something for a Nothing: every other item brings its own model with it.
-    bad_models = []
-    misplaced_models = []
-    known_models = game_files.available_models()
-    for pickup in configuration["pickups"]:
-        model = pickup.get("model")
-        if model is None:
-            continue
-        if pickup["item"] != items.NOTHING_ITEM_ID:
-            misplaced_models.append(pickup["location"])
-        elif model not in known_models:
-            bad_models.append(model)
+    misplaced_models = [
+        pickup["location"]
+        for pickup in configuration["pickups"]
+        if "model" in pickup and pickup["item"] != items.NOTHING_ITEM_ID
+    ]
 
     errors = []
     if unknown:
@@ -51,8 +45,6 @@ def validate(configuration: dict) -> None:
         errors.append(f"missing locations {missing}")
     if misplaced_models:
         errors.append(f"a model only applies to a \"{items.NOTHING_ITEM_ID}\" pickup, but {misplaced_models} set one")
-    if bad_models:
-        errors.append(f"unknown models {sorted(set(bad_models))}; this patcher ships {known_models}")
     if errors:
         raise ValueError(f"Invalid pickups: {'; '.join(errors)}")
 
@@ -69,14 +61,18 @@ def patch_game(input_path: Path, configuration: dict) -> None:
     game_install.check(input_path)
 
     location_ids = {location.spawn_id: location.id for location in load_locations()}
-    # Models by game item id (the game builds the model path from it), captions by location.
-    models: dict[str, str] = {}
+    # Model files by game item id (the game builds the model path from it), captions by location.
+    models: dict[str, bytes] = {
+        items.NOTHING_ITEM_ID: game_files.model_data(input_path, items.DEFAULT_MODEL),
+    }
     captions: dict[int, str] = {}
     for pickup in configuration["pickups"]:
         location_id = location_ids[pickup["location"]]
         if pickup["item"] == items.NOTHING_ITEM_ID:
             model = pickup.get("model") or items.DEFAULT_MODEL
-            models[items.game_item_id(pickup["item"], model)] = model
+            item_id = items.game_item_id(pickup["item"], model)
+            if item_id not in models:
+                models[item_id] = game_files.model_data(input_path, model)
             captions[location_id] = pickup.get("caption") or game_files.NOTHING_DEFAULT_TEXT
         elif "caption" in pickup:
             captions[location_id] = pickup["caption"]

@@ -91,8 +91,11 @@ Every pickup the game has no item of its own for is `nothing`: an empty location
 item are the same pickup. What makes it a multiworld pickup is the location, which the DLL reports and whose dialog
 line names the real item and player. There is no separate `offworld` id.
 
-A pickup can choose its bubble model: the patcher's `model` mints `nothing_<model>`, since the game derives the model
-path from the id. The DLL's `pickup_dialog` hook collapses it back to `nothing` before the game's `inventory_add` and
+A pickup can choose its bubble model: the patcher's `model` names the item whose look it borrows (so a coop or
+multiworld pickup shows the real item) and mints `nothing_<model>` with `/` flattened to `_`, since the game derives
+the model path from the id. The patcher copies that item's `.sim` out of the player's install into
+`open-yoku-rando/items/`; Wickerlings and fruit take theirs from `items/collectible` and `pickups/fruit_large` and
+`pickups/fruit_medium`, and `nothing` is the shipped Randovania icon. The DLL's `pickup_dialog` hook collapses it back to `nothing` before the game's `inventory_add` and
 dialog lookup, so all Nothings stack in one slot and the player keeps a visible count of them.
 
 If the slot is ever unwanted: `pickup_dialog` (0x1f4110) skips its `inventory_add` when the byte at pickup object

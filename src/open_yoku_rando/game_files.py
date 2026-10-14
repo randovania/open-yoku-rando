@@ -16,6 +16,7 @@ Everything goes into MOD_FOLDER, except the xinput9_1_0.dll proxy, which Windows
 import dataclasses
 from pathlib import Path
 
+from open_yoku_rando import sim_texture
 from open_yoku_rando.file_util import atomic_write_bytes
 from open_yoku_rando.files import files_path
 from open_yoku_rando.game_install import dialog_anims_path, scripts_csv_path
@@ -42,21 +43,35 @@ NATIVE_FILES = {
 """The DLL and the proxy that starts it, built by native/build.cmd into files/native/."""
 
 
-def available_models() -> list[str]:
-    """The model names a pickup may ask for: the `.sim` files this package ships."""
-    items = files_path().joinpath("items")
-    return sorted(path.name[: -len(MODEL_SUFFIX)] for path in items.glob(f"*{MODEL_SUFFIX}"))
+MODEL_EXCEPTIONS = {
+    "wickerling": "processed/items/collectible",
+    "reward_fruit_big": "processed/pickups/fruit_large",
+    "reward_fruit_medium": "processed/pickups/fruit_medium",
+}
+"""Items whose look the game does not take from `processed/items/<item>`, game-relative without the suffix."""
 
 
-def installed_files(models: dict[str, str]) -> dict[str, str]:
-    """Game-relative path -> path inside this package's `files/`, for a game item id -> model name map."""
-    return {
-        **NATIVE_FILES,
-        **{
-            f"{ITEMS_FOLDER}/{item_id}{MODEL_SUFFIX}": f"items/{model}{MODEL_SUFFIX}"
-            for item_id, model in models.items()
-        },
-    }
+def model_source(game_path: Path, model: str) -> Path:
+    if model == DEFAULT_MODEL:
+        return installed_file_source(f"items/{DEFAULT_MODEL}{MODEL_SUFFIX}")
+    relative = MODEL_EXCEPTIONS.get(model, f"processed/items/{model}")
+    source = game_path.joinpath(f"{relative}{MODEL_SUFFIX}")
+    if not source.is_file():
+        raise ValueError(f"the game install has no model for {model!r}: {source} is missing")
+    return source
+
+
+WIDENED_MODELS = frozenset({"wickerling"})
+"""
+Models the bubble would show far too large: it scales a texture to a fixed width (`60 / width`), and
+`items/collectible` is narrow and tall, since the game never puts it into an item bubble.
+"""
+
+
+def model_data(game_path: Path, model: str) -> bytes:
+    """The `.sim` a bubble showing the item `model` gets, see model_source."""
+    data = model_source(game_path, model).read_bytes()
+    return sim_texture.widen_to_square(data) if model in WIDENED_MODELS else data
 
 
 def nothing_strings(captions: dict[int, str], game_item_ids: tuple[str, ...] = ()) -> list[tuple[str, str]]:
@@ -134,20 +149,21 @@ def installed_file_source(package_relative: str) -> Path:
 
 def install_files(
     game_path: Path,
-    models: dict[str, str],
+    models: dict[str, bytes],
     captions: dict[int, str],
     required_beacons: int = 0,
 ) -> Install:
     """
     Installs the DLLs, one `.sim` per entry in `models` and the texts, replacing a previous install.
 
-    `models` maps the game item id to the model its bubbles show; `captions` maps a location id to that
-    location's dialog line. With `required_beacons`, Nim starts the ceremony only once that many beacons are lit.
+    `models` maps the game item id to the `.sim` its bubbles show (see model_data); `captions` maps a location id
+    to that location's dialog line. With `required_beacons`, Nim starts the ceremony only once that many beacons are
+    lit.
     """
     # Read every source first, so a missing package file fails before the install is touched.
-    contents = {
-        target: installed_file_source(source).read_bytes() for target, source in installed_files(models).items()
-    }
+    contents = {target: installed_file_source(source).read_bytes() for target, source in NATIVE_FILES.items()}
+    for item_id, data in models.items():
+        contents[f"{ITEMS_FOLDER}/{item_id}{MODEL_SUFFIX}"] = data
     texts = nothing_strings(captions, tuple(models))
     if required_beacons > 0:
         contents[SCRIPTS_PATH] = gate_ceremony(scripts_csv_path(game_path).read_bytes(), required_beacons)
