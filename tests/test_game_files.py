@@ -1,10 +1,8 @@
-import struct
 import zlib
 
 import pytest
 
-from open_yoku_rando import game_files, sim_texture
-from tests import test_sim_texture
+from open_yoku_rando import game_files
 
 TARGET = f"{game_files.ITEMS_FOLDER}/{game_files.NOTHING_ITEM_ID}_x102.sim"
 TEXTS = game_files.TEXTS_PATH
@@ -22,7 +20,16 @@ def default_models() -> dict[str, bytes]:
 
 
 def shipped_bytes() -> bytes:
-    return game_files.installed_file_source(game_files.installed_files(default_models())[TARGET]).read_bytes()
+    return shipped_model().read_bytes()
+
+
+def add_game_model(game_path, relative: str) -> bytes:
+    """A model file of the game, game-relative without the suffix; returns its content."""
+    path = game_path.joinpath(f"{relative}_x102.sim")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = f"the game's {relative}".encode()
+    path.write_bytes(data)
+    return data
 
 
 def game_files_snapshot(game_path) -> dict[str, bytes]:
@@ -92,17 +99,6 @@ def test_a_model_comes_from_the_game_install(fake_game_path, model, relative):
 def test_a_model_missing_from_the_install_is_an_error(fake_game_path):
     with pytest.raises(ValueError, match="has no model for 'toolbox'"):
         game_files.model_source(fake_game_path, "toolbox")
-
-
-def test_the_wickerling_model_is_widened(fake_game_path):
-    path = fake_game_path.joinpath("processed/items/collectible_x102.sim")
-    path.parent.mkdir(parents=True)
-    path.write_bytes(test_sim_texture.make_sim(8, 40))
-
-    data = game_files.model_data(fake_game_path, "wickerling")
-
-    assert data == sim_texture.widen_to_square(path.read_bytes())
-    assert struct.unpack_from("<3I", data, 4)[1:] == (40, 40)
 
 
 def test_install_copies_a_game_model_under_its_id(fake_game_path):

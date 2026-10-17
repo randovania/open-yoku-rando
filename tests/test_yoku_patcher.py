@@ -166,22 +166,26 @@ def test_validate_rejects_a_model_on_a_real_item(shuffled_configuration):
         yoku_patcher.validate(shuffled_configuration)
 
 
-def test_validate_rejects_a_model_the_patcher_does_not_ship(shuffled_configuration):
+def test_validate_rejects_a_model_that_is_no_item(shuffled_configuration):
     shuffled_configuration["pickups"][0]["item"] = items.NOTHING_ITEM_ID
     shuffled_configuration["pickups"][0]["model"] = "no_such_model"
 
-    with pytest.raises(ValueError, match="unknown models"):
+    with pytest.raises(jsonschema.ValidationError):
         yoku_patcher.validate(shuffled_configuration)
 
 
-def test_the_default_model_is_shipped():
-    assert items.DEFAULT_MODEL in game_files.available_models()
+def test_validate_accepts_an_item_as_model(shuffled_configuration):
+    shuffled_configuration["pickups"][0]["item"] = items.NOTHING_ITEM_ID
+    shuffled_configuration["pickups"][0]["model"] = "abilities/dive"
+
+    yoku_patcher.validate(shuffled_configuration)
 
 
 def test_a_model_decides_the_id_written_into_the_save():
     assert items.game_item_id(items.NOTHING_ITEM_ID, None) == items.NOTHING_ITEM_ID
     assert items.game_item_id(items.NOTHING_ITEM_ID, items.DEFAULT_MODEL) == items.NOTHING_ITEM_ID
-    assert items.game_item_id(items.NOTHING_ITEM_ID, "other_game") == "nothing_other_game"
+    assert items.game_item_id(items.NOTHING_ITEM_ID, "toolbox") == "nothing_toolbox"
+    assert items.game_item_id(items.NOTHING_ITEM_ID, "abilities/dive") == "nothing_abilities_dive"
     assert items.game_item_id("toolbox", None) == "toolbox"
 
 
@@ -199,31 +203,56 @@ def test_a_nothing_with_a_model_installs_that_model_under_its_own_id(
     assert placed_items(fake_game_path)[:2] == [items.NOTHING_ITEM_ID, items.NOTHING_ITEM_ID]
 
 
-def test_a_named_model_gets_its_own_id_and_text(fake_game_path, vanilla_configuration, monkeypatch):
-    # Pretend the package ships a second model, so the id, the installed file and the text keys can be checked.
-    monkeypatch.setattr(game_files, "available_models", lambda: ["other_game", items.DEFAULT_MODEL])
-    monkeypatch.setattr(
-        game_files,
-        "installed_file_source",
-        lambda relative: game_files.files_path().joinpath(f"items/{items.DEFAULT_MODEL}_x102.sim"),
-    )
+def add_game_model(game_path, relative: str) -> bytes:
+    """A model file of the game, game-relative without the suffix; returns its content."""
+    path = game_path.joinpath(f"{relative}_x102.sim")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = f"the game's {relative}".encode()
+    path.write_bytes(data)
+    return data
+
+
+def test_a_named_model_gets_its_own_id_and_text(fake_game_path, vanilla_configuration):
+    data = add_game_model(fake_game_path, "processed/items/abilities/dive")
     vanilla_configuration["pickups"][0]["item"] = items.NOTHING_ITEM_ID
-    vanilla_configuration["pickups"][0]["model"] = "other_game"
+    vanilla_configuration["pickups"][0]["model"] = "abilities/dive"
     vanilla_configuration["pickups"][0]["caption"] = "You found another player's item!"
 
     yoku_patcher.patch_game(fake_game_path, vanilla_configuration)
 
-    assert fake_game_path.joinpath(game_files.ITEMS_FOLDER, "nothing_other_game_x102.sim").is_file()
-    assert placed_items(fake_game_path)[0] == "nothing_other_game"
+    installed = fake_game_path.joinpath(game_files.ITEMS_FOLDER, "nothing_abilities_dive_x102.sim")
+    assert installed.read_bytes() == data
+    assert placed_items(fake_game_path)[0] == "nothing_abilities_dive"
 
     # The captions and the default line hang off the base id, because the DLL collapses a model id back to it at
     # pickup. Name and description are repeated under the model id for a pickup that skips that hook.
     location_id = load_locations()[0].id
     strings = fake_game_path.joinpath(game_files.TEXTS_PATH).read_text(encoding="utf-8")
     assert f"items/nothing_{location_id}_1;You found another player's item!" in strings
-    assert "items/nothing_other_game_name;Nothing" in strings
-    assert "items/nothing_other_game_1;" not in strings
-    assert f"items/nothing_other_game_{location_id}_1" not in strings
+    assert "items/nothing_abilities_dive_name;Nothing" in strings
+    assert "items/nothing_abilities_dive_1;" not in strings
+    assert f"items/nothing_abilities_dive_{location_id}_1" not in strings
+
+
+def test_the_inventory_icon_is_installed_when_every_nothing_has_a_model(fake_game_path, vanilla_configuration):
+    # Coop: every pickup shows a Yoku item, but the inventory shows the bare id all Nothings collapse to.
+    add_game_model(fake_game_path, "processed/items/toolbox")
+    vanilla_configuration["pickups"][0]["item"] = items.NOTHING_ITEM_ID
+    vanilla_configuration["pickups"][0]["model"] = "toolbox"
+
+    yoku_patcher.patch_game(fake_game_path, vanilla_configuration)
+
+    icon = fake_game_path.joinpath(game_files.ITEMS_FOLDER, f"{items.NOTHING_ITEM_ID}_x102.sim")
+    assert icon.read_bytes() == game_files.model_source(fake_game_path, items.DEFAULT_MODEL).read_bytes()
+
+
+def test_patch_game_rejects_a_model_missing_from_the_install(fake_game_path, vanilla_configuration):
+    vanilla_configuration["pickups"][0]["item"] = items.NOTHING_ITEM_ID
+    vanilla_configuration["pickups"][0]["model"] = "toolbox"
+
+    with pytest.raises(ValueError, match="has no model for 'toolbox'"):
+        yoku_patcher.patch_game(fake_game_path, vanilla_configuration)
+    assert not fake_game_path.joinpath(game_files.MOD_FOLDER).exists()
 
 
 def test_patch_with_a_nothing_pickup_installs_the_texture(
