@@ -7,8 +7,14 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <optional>
 
 namespace oyr::new_game {
+
+struct SeedInfo {
+    std::string rdv_version;   // what Randovania version was used
+    std::string oyr_version;   // what oyr version was used
+};
 
 // The text key the menu patch points the entry at.
 inline constexpr const char* kMenuTextKey = "ui_randovania_start";
@@ -25,6 +31,8 @@ const std::string& menu_text();
 // open-yoku-rando/texts.strings ("key;value" lines): Nothing texts and location lines, added to the dialog table
 // by the tick.
 const std::vector<std::pair<std::string, std::string>>& texts();
+// seed info read from the input file
+const std::optional<SeedInfo>& seed_info();
 // The hash of a seed started from this game folder, by seed number; for slot labels.
 const std::string* hash_for_seed(uint32_t seed);
 

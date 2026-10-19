@@ -8,6 +8,7 @@
         "level": "intro_landing",
         "spawner": -1
     },
+    "rdv_version": "vX.Y.Z",
     "pickups": [
         {
             "location": "intro_landing_upper:5394",

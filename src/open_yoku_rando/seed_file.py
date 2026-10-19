@@ -10,6 +10,7 @@ from open_yoku_rando.file_util import atomic_write_bytes
 from open_yoku_rando.game_files import MOD_FOLDER
 from open_yoku_rando.items import game_item_id
 from open_yoku_rando.locations import load_locations
+from open_yoku_rando.version import version
 
 SEED_FORMAT = 1
 SEED_FILE_NAME = "seed.txt"
@@ -45,6 +46,10 @@ def build(configuration: dict) -> str:
     for pickup in configuration["pickups"]:
         item = game_item_id(pickup["item"], pickup.get("model"))
         lines.append(f"place\t{location_ids[pickup['location']]}\t{item}")
+    lines += [
+        f"rdv_version\t{configuration['rdv_version']}",
+        f"oyr_version\t{version}",
+    ]
     return "\n".join(lines) + "\n"
 
 

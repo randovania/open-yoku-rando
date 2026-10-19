@@ -2,6 +2,8 @@
 
 #include "log.hpp"
 #include "messages.hpp"
+#include "game.hpp"
+#include "new_game.hpp"
 
 #include <d3d11.h>
 #include <dxgi.h>
@@ -71,9 +73,61 @@ bool start(IDXGISwapChain* swap_chain) {
     return true;
 }
 
+void draw_outlined_text(
+    const float height, const float width, float& y,const std::string& text,
+    const float alpha, ImDrawList* list
+) {
+    const float size = height * 0.035f;
+    const float wrap = width * 0.7f;
+    const float outline = size * 0.06f;
+
+    const char* ctext = text.c_str();
+    ImVec2 extent = g_font->CalcTextSizeA(size, FLT_MAX, wrap, ctext);
+    ImVec2 at((width - extent.x) / 2, y);
+
+    ImU32 shadow = IM_COL32(20, 12, 4, static_cast<int>(220 * alpha));
+    ImU32 foreground = IM_COL32(255, 248, 230, static_cast<int>(255 * alpha));
+
+    for (ImVec2 offset : {ImVec2(-outline, 0), ImVec2(outline, 0), ImVec2(0, -outline), ImVec2(0, outline)}) {
+        list->AddText(
+            g_font, size,
+            ImVec2(at.x + offset.x, at.y + offset.y),
+            shadow, ctext, nullptr, wrap);
+    }
+
+    list->AddText(g_font, size, at, foreground, ctext, nullptr, wrap);
+    y += extent.y + size * 0.35f;
+}
+
+void draw_version_string(const float height, const float width, ImDrawList* list) {
+    const auto& seed_info = oyr::new_game::seed_info();
+    if (!seed_info) return;
+    const auto& rdv_version = seed_info->rdv_version;
+    const auto& oyr_version = seed_info->oyr_version;
+    const std::string version_string =
+        (rdv_version.empty() ? "" : "RDV: " + rdv_version + " | ") +
+        (oyr_version.empty() ? "" : "OYR: " + oyr_version);
+    if (version_string.empty()) return;
+    float y = height * 0.06f;
+    draw_outlined_text(height, width, y, version_string, 1.0f, list);
+}
+
+void draw_in_game_message(
+    const float height,
+    const float width,
+    std::vector<oyr::messages::Shown>& shown,
+    ImDrawList* list) {
+    float y = height * 0.06f;
+    for (const messages::Shown& message : shown) {
+        draw_outlined_text(height, width, y, message.text, message.alpha, list);
+    }
+}
+
 void draw(IDXGISwapChain* swap_chain) {
+    bool show_version_string = oyr::game::current_level() == "_start_screen";
+
     std::vector<messages::Shown> shown = messages::shown();
-    if (shown.empty() || g_failed) {
+    if ((shown.empty() && !show_version_string) || g_failed) {
         return;
     }
     if (!g_swap_chain && !start(swap_chain)) {
@@ -107,21 +161,8 @@ void draw(IDXGISwapChain* swap_chain) {
     ImGui_ImplDX11_NewFrame();
     ImGui::NewFrame();
     ImDrawList* list = ImGui::GetForegroundDrawList();
-    const float size = height * 0.035f;
-    const float wrap = width * 0.7f;
-    const float outline = size * 0.06f;
-    float y = height * 0.06f;
-    for (const messages::Shown& message : shown) {
-        const char* text = message.text.c_str();
-        ImVec2 extent = g_font->CalcTextSizeA(size, FLT_MAX, wrap, text);
-        ImVec2 at((width - extent.x) / 2, y);
-        ImU32 shadow = IM_COL32(20, 12, 4, static_cast<int>(220 * message.alpha));
-        for (ImVec2 offset : {ImVec2(-outline, 0), ImVec2(outline, 0), ImVec2(0, -outline), ImVec2(0, outline)}) {
-            list->AddText(g_font, size, ImVec2(at.x + offset.x, at.y + offset.y), shadow, text, nullptr, wrap);
-        }
-        list->AddText(g_font, size, at, IM_COL32(255, 248, 230, static_cast<int>(255 * message.alpha)), text, nullptr, wrap);
-        y += extent.y + size * 0.35f;
-    }
+    if (show_version_string) draw_version_string(height, width, list);
+    else draw_in_game_message(height, width, shown, list);
     ImGui::Render();
 
     // Draw on the back buffer, then give the game back the render targets it had.

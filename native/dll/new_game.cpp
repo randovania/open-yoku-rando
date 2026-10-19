@@ -12,13 +12,13 @@
 #include <format>
 #include <fstream>
 #include <map>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace oyr::new_game {
+std::optional<SeedInfo> g_seed_info;
 namespace {
 
 namespace fs = std::filesystem;
@@ -80,6 +80,8 @@ std::vector<std::string_view> split_tabs(std::string_view line) {
 //   start       <item>  <count>        (any number of lines)
 //   start_location  <level>  <spawner>  (where a new game begins)
 //   place       <location id>  <item>  (one line per location)
+//   rdv_version    <verison string>
+//   oyr_version    <version string>
 // Returns an error message, empty on success.
 std::string read_seed(const fs::path& path, Seed& seed) {
     std::ifstream file(path, std::ios::binary);
@@ -88,6 +90,7 @@ std::string read_seed(const fs::path& path, Seed& seed) {
     }
     int format = 0;
     std::string line;
+    SeedInfo seed_info;
     for (int number = 1; std::getline(file, line); ++number) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
@@ -122,6 +125,12 @@ std::string read_seed(const fs::path& path, Seed& seed) {
         } else if (f[0] == "place" && f.size() == 3) {
             uint32_t location = 0;
             ok = parse_number(f[1], location) && !f[2].empty() && seed.placement.emplace(location, std::string(f[2])).second;
+        } else if (f[0] == "rdv_version" && f.size() == 2) {
+            seed_info.rdv_version = f[1];
+            ok = !seed_info.rdv_version.empty();
+        } else if (f[0] == "oyr_version" && f.size() == 2) {
+            seed_info.oyr_version = f[1];
+            ok = !seed_info.oyr_version.empty();
         }
         if (!ok) {
             return std::format("{} line {} is not understood: {}", path.string(), number, line);
@@ -133,6 +142,7 @@ std::string read_seed(const fs::path& path, Seed& seed) {
     if (seed.identifier.empty() || seed.start_location.level.empty() || seed.placement.empty()) {
         return std::format("{} has no identifier, start location or placement", path.string());
     }
+    g_seed_info = std::move(seed_info);
     return {};
 }
 
@@ -205,6 +215,10 @@ const std::string* hash_for_seed(uint32_t seed) {
 
 const std::vector<std::pair<std::string, std::string>>& texts() {
     return g_texts;
+}
+
+const std::optional<SeedInfo>& seed_info() {
+    return g_seed_info;
 }
 
 MenuEntry prepare_menu() {

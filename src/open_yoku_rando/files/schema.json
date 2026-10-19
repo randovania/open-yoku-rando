@@ -10,6 +10,11 @@
             "type": "string",
             "description": "An unique identifier for this configuration. It is stored in the save's _global.quests_completed as \"@open-yoku-rando:<identifier>\"."
         },
+        "rdv_version": {
+            "type": "string",
+            "description": "Randovania version used to generate the seed",
+            "default": ""
+        },
         "seed_hash": {
             "type": "string",
             "minLength": 1,
