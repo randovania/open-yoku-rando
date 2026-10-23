@@ -216,7 +216,7 @@ bool on_command(void* menu, void* picked) {
 
     if (command == kCommandWStart) {
         // get warp to start location
-        std::vector<std::string>* quests = game::quests_completed();
+        std::vector<std::string>* quests = game::randovania_quests();
         if (!quests) {
             return false;
         }

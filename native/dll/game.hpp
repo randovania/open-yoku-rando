@@ -137,7 +137,8 @@ std::span<const InventoryItem> inventory();
 // Same value as the getItemCount native.
 int32_t item_count(const std::string& item);
 
-// The save's `quests_completed`; null before the globals exist.
+// The save's `quests_completed`; null before the globals exist. Only for new_game, which makes a save a Randovania
+// save by writing the identifier; everything else uses randovania_quests.
 std::vector<std::string>* quests_completed();
 // The save's `quests_completed` if the save was started from a Randovania seed (it has a kIdentifierPrefix marker);
 // null otherwise. Other code takes any of our markers as a sign of such a save, so other saves must never get one.

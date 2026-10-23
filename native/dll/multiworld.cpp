@@ -206,7 +206,7 @@ bool save_matches() {
     if (g_identifier_marker.empty()) {
         return true;
     }
-    const std::vector<std::string>* quests = game::quests_completed();
+    const std::vector<std::string>* quests = game::randovania_quests();
     bool matches = quests && std::ranges::find(*quests, g_identifier_marker) != quests->end();
     if (!matches && !g_reported_other_save) {
         g_reported_other_save = true;
@@ -216,7 +216,7 @@ bool save_matches() {
 }
 
 std::string layout_uuid() {
-    const std::vector<std::string>* quests = game::quests_completed();
+    const std::vector<std::string>* quests = game::randovania_quests();
     if (!quests) {
         return {};
     }
@@ -229,7 +229,7 @@ std::string layout_uuid() {
 }
 
 size_t received_count() {
-    const std::vector<std::string>* quests = game::quests_completed();
+    const std::vector<std::string>* quests = game::randovania_quests();
     if (!quests) {
         return 0;
     }
@@ -250,9 +250,9 @@ void note_pickup_received() {
     if (!save_matches()) {
         return;
     }
-    std::vector<std::string>* quests = game::quests_completed();
+    std::vector<std::string>* quests = game::randovania_quests();
     if (!quests) {
-        log::info("cannot record the received pickup: the game has no save loaded");
+        log::info("cannot record the received pickup: no Randovania save is loaded");
         return;
     }
     std::string marker = std::format("{}{}", kReceivedPrefix, received_count() + 1);

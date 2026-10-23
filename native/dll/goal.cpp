@@ -18,7 +18,7 @@ constexpr std::string_view kFinalBossEnding = "end_1";
 }  // namespace
 
 size_t beacons_lit() {
-    const std::vector<std::string>* quests = game::quests_completed();
+    const std::vector<std::string>* quests = game::randovania_quests();
     if (!quests) {
         return 0;
     }
@@ -26,7 +26,7 @@ size_t beacons_lit() {
 }
 
 bool beaten() {
-    const std::vector<std::string>* quests = game::quests_completed();
+    const std::vector<std::string>* quests = game::randovania_quests();
     return quests && std::ranges::find(*quests, kVictory) != quests->end();
 }
 
