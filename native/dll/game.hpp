@@ -34,6 +34,8 @@ inline constexpr uintptr_t dialog_flag = 0x4dd0;
 inline constexpr uintptr_t string_table = 0x4de0;
 inline constexpr uintptr_t ui_file = 0x9018;
 inline constexpr uintptr_t dialog_file = 0x9028;
+// The chosen language's dialog file; searched before dialog_file.
+inline constexpr uintptr_t dialog_translation_file = 0x9058;
 inline constexpr uintptr_t file_strings = 0x78;  // std::vector<std::array<std::string, 2>> in a text file object
 inline constexpr uintptr_t world = 0x1f80;        // World*, the running game
 inline constexpr uintptr_t loot_tables = 0x89f8;  // std::vector<LootTable>, loottables.json
@@ -171,6 +173,14 @@ void erase_string(const std::string& key);
 std::string get_string(const std::string& key, bool* found = nullptr);
 // Adds `entries` to the dialog table. Cheap per tick: only rechecks when the table was replaced or resized.
 void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>>& entries);
+// A dialog line to replace while it still reads `original`, the way one of the game's languages ships it.
+struct DialogFix {
+    std::string key;
+    std::string original;
+    std::string fix;
+};
+// Applies `fixes` to the dialog table. Cheap per tick, like ensure_dialog_strings.
+void fix_dialog_strings(const std::vector<DialogFix>& fixes);
 // Adds a "ui_" key unless present. False while the UI text is not loaded yet.
 bool ensure_ui_string(const std::string& key, const std::string& value);
 // Adds to `fruit` and `total_fruit`, like addFruit with a positive amount.

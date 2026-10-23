@@ -27,6 +27,25 @@ def dialog_anims_path(game_path: Path) -> Path:
     return game_path.joinpath("processed", "text", "dialog_anim.strings")
 
 
+def dialog_strings_paths(game_path: Path) -> dict[str, Path]:
+    """The dialog text of every language the game ships, by language code ("en", "de", ...)."""
+    text = game_path.joinpath("processed", "text")
+    paths = {"en": text.joinpath("dialog_en.strings")}
+    for path in text.joinpath("translations").glob("dialog_*.strings"):
+        paths[path.stem.removeprefix("dialog_")] = path
+    return {language: path for language, path in paths.items() if path.is_file()}
+
+
+def read_strings(data: bytes) -> dict[str, str]:
+    """`key;value` lines of a `.strings` file; the first line of a key wins, as in the game."""
+    texts: dict[str, str] = {}
+    for line in data.decode("utf-8-sig").rstrip("\0").splitlines():
+        key, separator, value = line.partition(";")
+        if separator and key and not key.startswith("--"):
+            texts.setdefault(key, value)
+    return texts
+
+
 def read_randomizer_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")

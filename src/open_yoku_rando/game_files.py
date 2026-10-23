@@ -10,6 +10,7 @@ Everything goes into MOD_FOLDER, except the xinput9_1_0.dll proxy, which Windows
   in place of `data/text/randomizer_scripts.csv`;
 - `dialog_anim.strings`, the game's own with an animation for Nim's beacon hint, which the DLL serves in place of
   `processed/text/dialog_anim.strings`;
+- `text_fixes.txt`, dialog lines the DLL replaces while they still read as the game ships them;
 - `seed.txt`, written by seed_file.
 """
 
@@ -19,7 +20,7 @@ from pathlib import Path
 from open_yoku_rando import sim_texture
 from open_yoku_rando.file_util import atomic_write_bytes
 from open_yoku_rando.files import files_path
-from open_yoku_rando.game_install import dialog_anims_path, scripts_csv_path
+from open_yoku_rando.game_install import dialog_anims_path, dialog_strings_paths, read_strings, scripts_csv_path
 from open_yoku_rando.items import DEFAULT_MODEL, MODEL_SUFFIX, NOTHING_ITEM_ID
 from open_yoku_rando.logger import LOG
 
@@ -30,6 +31,7 @@ TEXTS_PATH = f"{MOD_FOLDER}/texts.strings"
 ITEMS_FOLDER = f"{MOD_FOLDER}/items"
 SCRIPTS_PATH = f"{MOD_FOLDER}/randomizer_scripts.csv"
 ANIMS_PATH = f"{MOD_FOLDER}/dialog_anim.strings"
+TEXT_FIXES_PATH = f"{MOD_FOLDER}/text_fixes.txt"
 NOTHING_KEY_PREFIX = f"items/{NOTHING_ITEM_ID}"
 NOTHING_NAME = "Nothing"
 NOTHING_DESC = "An empty spot, or another player's item."
@@ -131,12 +133,57 @@ def animate_hint(anims: bytes) -> bytes:
     return body + f"nim_{BEACON_HINT_LINE};{_HINT_ANIMATION}\r\n".encode() + end
 
 
+TEXT_FIXES = {
+    # Fosfor sends a player without the Old Postal Badge to Posterodactyl, who only has it in vanilla
+    "fosfor_11": {
+        "en": "As much as I want those <style1>Cove Mushrooms</style1>. "
+              "First you need the <style3>Old Postal Badge</style>.",
+        "de": "So sehr ich diese <style1>Buchtpilze</style1> auch will. "
+              "Zuerst brauchst du das <style3>Alte Postabzeichen</style>.",
+        "es": "Por mucho que quiera esas <style1>setas de caverna</style1>. "
+              "Primero necesitas el <style3>Distintivo postal viejo</style>.",
+        "fr": "Je meurs d'envie d'avoir un de ces <style1>champignons des criques</style1>. "
+              "Il te faut d'abord le <style3>Vieux badge de postier</style>.",
+        "it": "Per quanto io desideri quei <style1>funghi di grotta</style1>... "
+              "Prima ti serve il <style3>Vecchio distintivo postale</style>.",
+        "ja": "<style1>山間キノコ</style1>が欲しいのう。まずは<style3>ボロボロの郵便バッジ</style>が必要じゃ。",
+        "ko": "내가 <style1>골짜기 버섯</style1>을 얻기 전까지는 말야. 먼저 <style3>오래된 우편 배지</style>가 필요해.",
+        "ru": "Ах, как хочется <style1>заливного гриба</style1>! "
+              "Сначала тебе нужен <style3>старый значок почтмейстера</style>.",
+        "zh": "好想吃<style1>湾蘑菇</style1>啊。你得先拿到<style3>旧邮局勋章</style>。",
+    },
+}
+"""Dialog lines that are wrong in a randomizer, by key and language."""
+
+
+def text_fixes(game_path: Path) -> list[tuple[str, str, str]]:
+    """(key, the line as the game ships it, its fix) for every language of the install that has the key."""
+    fixes = []
+    for language, path in sorted(dialog_strings_paths(game_path).items()):
+        shipped = read_strings(path.read_bytes())
+        for key, by_language in TEXT_FIXES.items():
+            if language not in by_language:
+                LOG.warning("No fix of %s for the language %s", key, language)
+            elif key in shipped:
+                fixes.append((key, shipped[key], by_language[language]))
+    return fixes
+
+
+def text_fixes_file(fixes: list[tuple[str, str, str]]) -> bytes:
+    """`key<TAB>original<TAB>fix` lines, CRLF."""
+    for fix in fixes:
+        if any("\t" in part or "\n" in part for part in fix):
+            raise ValueError(f"a text fix cannot hold a tab or a line break: {fix!r}")
+    return "".join("\t".join(fix) + "\r\n" for fix in fixes).encode("utf-8")
+
+
 @dataclasses.dataclass(frozen=True)
 class Install:
     written: tuple[str, ...]
     """Game-relative paths that were written."""
     removed: tuple[str, ...]
-    """Files a previous install left that this one does not use: models, script overrides and dialog animations."""
+    """Files a previous install left that this one does not use: models, script overrides, dialog animations and text
+    fixes."""
 
 
 def installed_file_source(package_relative: str) -> Path:
@@ -170,9 +217,11 @@ def install_files(
         contents[ANIMS_PATH] = animate_hint(dialog_anims_path(game_path).read_bytes())
         texts.append((f"nim_{BEACON_HINT_LINE}", beacon_hint(required_beacons)))
     contents[TEXTS_PATH] = strings_file(texts)
+    if fixes := text_fixes(game_path):
+        contents[TEXT_FIXES_PATH] = text_fixes_file(fixes)
 
     removed = []
-    for override in (SCRIPTS_PATH, ANIMS_PATH):
+    for override in (SCRIPTS_PATH, ANIMS_PATH, TEXT_FIXES_PATH):
         stale = game_path.joinpath(override)
         if override not in contents and stale.is_file():
             stale.unlink()

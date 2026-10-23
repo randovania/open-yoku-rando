@@ -3,6 +3,8 @@
 // Starting a Randovania seed: on a new randomizer game the loader's roll is skipped and the placement comes from
 // open-yoku-rando/seed.txt. See "Starting a randomizer game" in docs/exe-research.md.
 
+#include "game.hpp"
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -31,6 +33,8 @@ const std::string& menu_text();
 // open-yoku-rando/texts.strings ("key;value" lines): Nothing texts and location lines, added to the dialog table
 // by the tick.
 const std::vector<std::pair<std::string, std::string>>& texts();
+// open-yoku-rando/text_fixes.txt ("key<TAB>original<TAB>fix" lines): dialog lines that are wrong in a randomizer.
+const std::vector<game::DialogFix>& text_fixes();
 // seed info read from the input file
 const std::optional<SeedInfo>& seed_info();
 // The hash of a seed started from this game folder, by seed number; for slot labels.

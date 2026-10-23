@@ -370,6 +370,7 @@ void on_tick() {
         game::ensure_ui_string(new_game::kMenuTextKey, new_game::menu_text());
     }
     game::ensure_dialog_strings(new_game::texts());
+    game::fix_dialog_strings(new_game::text_fixes());
 
     uint32_t frame = game::frame_counter();
     if (g_have_frame && frame == g_last_frame) {
