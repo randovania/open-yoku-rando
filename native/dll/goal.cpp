@@ -15,15 +15,6 @@ constexpr std::string_view kBeaconPrefix = "@open-yoku-rando:beacon:";
 constexpr std::string_view kVictory = "@open-yoku-rando:victory";
 constexpr std::string_view kFinalBossEnding = "end_1";
 
-// Only a save started from a Randovania seed carries the patcher's markers.
-std::vector<std::string>* randovania_save() {
-    std::vector<std::string>* quests = game::quests_completed();
-    if (!quests || std::ranges::none_of(*quests, [](const std::string& quest) { return quest.starts_with(game::kIdentifierPrefix); })) {
-        return nullptr;
-    }
-    return quests;
-}
-
 }  // namespace
 
 size_t beacons_lit() {
@@ -43,7 +34,7 @@ void on_beacon_used(bool lit_one) {
     if (!lit_one) {
         return;
     }
-    std::vector<std::string>* quests = randovania_save();
+    std::vector<std::string>* quests = game::randovania_quests();
     if (!quests) {
         return;
     }
@@ -56,7 +47,7 @@ void on_achievement(std::string_view name) {
     if (name != kFinalBossEnding || beaten()) {
         return;
     }
-    if (std::vector<std::string>* quests = randovania_save()) {
+    if (std::vector<std::string>* quests = game::randovania_quests()) {
         quests->push_back(std::string(kVictory));
         log::info("the final boss is beaten");
     }

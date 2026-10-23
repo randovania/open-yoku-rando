@@ -67,7 +67,7 @@ rolls. Afterwards the DLL writes every entry's item, the starting items, fruit a
 `<game>/open-yoku-rando/seed.txt`. Nothing reads the entries earlier, because a pickup's level number is set right
 before the loader runs.
 
-## Warp to Start
+## Warp to Start and Warp to Village
 
 The save manager at `globals+0x2590` holds the save document (`+0x50`) and the `_global` fields `level` (`+0x28`,
 i.e. `globals+0x25b8`) and `spawner` (`+0x48`). When a level starts, the ball spawner search (0x259bd0) takes the
@@ -87,6 +87,15 @@ from what was just saved, so inventory, quests and collected locations stay; onl
 while a level load is pending (`globals+0x3630`) or the game saves nothing (`globals+0x1f06c` bit 0). The location
 comes from the seed file's `start_location` and is kept in `quests_completed` as
 `@open-yoku-rando:start:<level>:<spawner>`; the entry only appears in a save that has it.
+
+"Warp to Village" follows it and works the same way, with the save point in `hub_village` (the
+`special_checkpoint` with id 4226) as its target. It only warps once that checkpoint was reached; before that it opens
+a message with one "OK" entry, built like the confirm (0x2bc1a0) without its Yes: the line is a child node with the
+bytes `+0x250` and `+0x253` set, and "OK" is an entry (vtable `+0x38`, 0x2bc0f0) running the game's `$back` command. Menu entries have no
+disabled look: their text is always drawn white (0x2bcade, 0x2bcfdb) and without the dialog's `<styleN>` markup. Touching a
+checkpoint runs `checkpoint_save` with it, which sets `level` to the checkpoint's level and `spawner` to its id
+(0x26b787..0x26b7c7). When the DLL sees `hub_village`/4226 there, it adds
+`@open-yoku-rando:reached:hub_village:4226` to `quests_completed`.
 
 A new game begins at the same location. The start screen's script opens the first level with
 `loadLevel("intro_landing")`, and that native's only `level_load` call (0x2024bd) is redirected: for a new randomizer
@@ -136,7 +145,7 @@ the `unlockAchievement` registration in `script_api_init` at a wrapper that adds
 | randomizer loader | 0x168da0 | `(RandomizerState*, level data, bool dump)` |
 | slot menu builder | 0x2add70 | |
 | pause menu builder / command handler | 0x2a49d0 / 0x2ac6b0 | the handler is shared with the main menu |
-| `checkpoint_save` / `save_globals` / `save_apply` | 0x26b740 / 0x26baf0 / 0x269be0 | see "Warp to Start" |
+| `checkpoint_save` / `save_globals` / `save_apply` | 0x26b740 / 0x26baf0 / 0x269be0 | see "Warp to Start and Warp to Village" |
 | `ui_text` | 0x27cbb0 | `(globals+0x8fd0, const char** out, 0, key)`, the translation first, then the English UI text |
 
 Globals offsets: level name 0x25b8, frame counter 0x2028, inventory 0x29e8, fruit 0x2a30 / total 0x2a34, wallet size

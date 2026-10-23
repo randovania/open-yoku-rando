@@ -13,21 +13,39 @@ namespace oyr::warp {
 namespace {
 
 constexpr int32_t kGameModeRandomizer = 3;
-constexpr const char* kCommand = "oyr_warp_to_start";
-constexpr const char* kTextKey = "ui_oyr_warp_to_start";
-constexpr const char* kText = "Warp to Start";
+constexpr const char* kCommandWStart = "oyr_warp_to_start";
+constexpr const char* kTextKeyStart = "ui_oyr_warp_to_start";
+constexpr const char* kTextStart = "Warp to Start";
+constexpr const char* kCommandWVillage = "oyr_warp_to_village";
+constexpr const char* kTextKeyVillage = "ui_oyr_warp_to_village";
+constexpr const char* kTextVillage = "Warp to Village";
+constexpr const char* kTextKeyVillageLocked = "ui_oyr_warp_to_village_locked";
+constexpr const char* kTextVillageLocked = "Reach the village save point first";
+constexpr const char* kTextKeyOk = "ui_oyr_ok";
+constexpr const char* kTextOk = "OK";
+// The game's own command for going back one menu, as the confirm's "No" runs it.
+constexpr const char* kCommandBack = "$back";
+
+const Location kVillage{"hub_village", 4226};
 
 // The pause menu object: its root menu node, whose entries the builder adds.
 constexpr uintptr_t kMenuRoot = 0x70;
 // A menu node: the command it runs when picked, a std::string.
 constexpr uintptr_t kNodeCommand = 0x70;
 // Menu node methods, as the slot menu builds "Delete" (Epic 0x2aef5f, 0x2af078).
+// vtable+0x38 (Epic 0x2bc0f0): MenuNode*(MenuNode*, const char* command, const char* text, ?, ?) - an entry that runs
+// `command` when picked, as the pause menu's "Resume".
+using AddEntryFn = void* (*)(void* node, const char* command, const char* text, void* unknown, void* unknown2);
+constexpr size_t kAddEntry = 0x38 / sizeof(void*);
 // vtable+0x40: MenuNode*(MenuNode*, int32 kind, const char* text, ?, ?) - a child node; kind 0 opens a submenu.
 using AddNodeFn = void* (*)(void* node, int32_t kind, const char* text, void* unknown, void* unknown2);
 constexpr size_t kAddNode = 0x40 / sizeof(void*);
 // vtable+0x48 (Epic 0x2bc1a0): fills a node with the line `title`, `yes` running `command` and `no` going back.
 using AddConfirmFn = void (*)(void* node, const char* command, const char* title, const char* yes, const char* no);
 constexpr size_t kAddConfirm = 0x48 / sizeof(void*);
+// What vtable+0x48 sets on its `title` child to make it a plain line: two bytes of the node set to 1.
+constexpr uintptr_t kNodeLabel = 0x250;
+constexpr uintptr_t kNodeLabel2 = 0x253;
 
 using UiTextFn = const char** (*)(void* texts, const char** out, int32_t language, const char* key);
 using CheckpointSaveFn = void (*)(void* save_manager, void* spawner);
@@ -50,6 +68,31 @@ const char* ui_text(uint8_t* globals, const char* key) {
     const char* text = nullptr;
     game_fn<UiTextFn>(&game::Build::ui_text)(globals + game::globals_offset::ui_texts, &text, 0, key);
     return text;
+}
+
+void add_confirm_entry(void* root, const char* text, const char* command, uint8_t* globals) {
+    const char* title = ui_text(globals, "ui_confirm");
+    const char* yes = ui_text(globals, "ui_confirm_yes");
+    const char* no = ui_text(globals, "ui_confirm_no");
+
+    void* submenu = method<AddNodeFn>(root, kAddNode)(root, 0, text, nullptr, nullptr);
+    if (!submenu) {
+        return;
+    }
+    method<AddConfirmFn>(submenu, kAddConfirm)(submenu, command, title, yes, no);
+}
+
+void add_message_entry(void* root, const char* text, const char* message, const char* ok) {
+    void* submenu = method<AddNodeFn>(root, kAddNode)(root, 0, text, nullptr, nullptr);
+    if (!submenu) {
+        return;
+    }
+    void* label = method<AddNodeFn>(submenu, kAddNode)(submenu, 0, message, nullptr, nullptr);
+    if (label) {
+        game::field<uint8_t>(label, kNodeLabel) = 1;
+        game::field<uint8_t>(label, kNodeLabel2) = 1;
+    }
+    method<AddEntryFn>(submenu, kAddEntry)(submenu, kCommandBack, ok, nullptr, nullptr);
 }
 
 std::optional<Location> start_location(const std::vector<std::string>& quests) {
@@ -84,16 +127,7 @@ std::string cannot_warp(uint8_t* globals) {
     return {};
 }
 
-void warp(uint8_t* globals) {
-    std::vector<std::string>* quests = game::quests_completed();
-    if (!quests) {
-        return;
-    }
-    std::optional<Location> start = start_location(*quests);
-    if (!start) {
-        return;
-    }
-    const Location& target = *start;
+void warp(uint8_t* globals, const Location& target) {
     if (std::string reason = cannot_warp(globals); !reason.empty()) {
         log::info("warp: not warping, {}", reason);
         return;
@@ -111,6 +145,14 @@ void warp(uint8_t* globals) {
     log::info("warp: from {} to {} spawner {}{}", from, target.level, target.spawner, loaded ? "" : ", but the game loaded no level");
 }
 
+std::string reached_marker(const Location& location) {
+    return std::format("{}{}:{}", kReachedPrefix, location.level, location.spawner);
+}
+
+bool has_reached(const std::vector<std::string>& quests, const Location& location) {
+    return std::ranges::find(quests, reached_marker(location)) != quests.end();
+}
+
 }  // namespace
 
 std::string marker(const Location& location) {
@@ -119,29 +161,81 @@ std::string marker(const Location& location) {
 
 void add_menu_entry(void* menu) {
     uint8_t* globals = game::globals();
-    std::vector<std::string>* quests = game::quests_completed();
-    if (!globals || !quests || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer || !start_location(*quests)) {
+    std::vector<std::string>* quests = game::randovania_quests();
+    if (!menu || !globals || !quests || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer) {
         return;
     }
-    game::ensure_ui_string(kTextKey, kText);
-    const char* text = ui_text(globals, kTextKey);
-    const char* title = ui_text(globals, "ui_confirm");
-    const char* yes = ui_text(globals, "ui_confirm_yes");
-    const char* no = ui_text(globals, "ui_confirm_no");
+    
     void* root = static_cast<uint8_t*>(menu) + kMenuRoot;
-    void* submenu = method<AddNodeFn>(root, kAddNode)(root, 0, text, nullptr, nullptr);
-    if (!submenu) {
+
+    game::ensure_ui_string(kTextKeyStart, kTextStart);
+    const char* text = ui_text(globals, kTextKeyStart);
+    if (text && start_location(*quests)) {
+        add_confirm_entry(root, text, kCommandWStart, globals);
+    }
+
+    game::ensure_ui_string(kTextKeyVillage, kTextVillage);
+    text = ui_text(globals, kTextKeyVillage);
+    if (!text) {
         return;
     }
-    method<AddConfirmFn>(submenu, kAddConfirm)(submenu, kCommand, title, yes, no);
+    if (has_reached(*quests, kVillage)) {
+        add_confirm_entry(root, text, kCommandWVillage, globals);
+    } else {
+        game::ensure_ui_string(kTextKeyVillageLocked, kTextVillageLocked);
+        game::ensure_ui_string(kTextKeyOk, kTextOk);
+        const char* message = ui_text(globals, kTextKeyVillageLocked);
+        const char* ok = ui_text(globals, kTextKeyOk);
+        if (message && ok) {
+            add_message_entry(root, text, message, ok);
+        }
+    }
+}
+
+void on_tick() {
+    uint8_t* globals = game::globals();
+    if (!globals || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer ||
+        game::field<int32_t>(globals, game::globals_offset::spawner) != kVillage.spawner ||
+        game::field<std::string>(globals, game::globals_offset::level) != kVillage.level) {
+        return;
+    }
+    std::vector<std::string>* quests = game::randovania_quests();
+    if (!quests || has_reached(*quests, kVillage)) {
+        return;
+    }
+    quests->push_back(reached_marker(kVillage));
+    log::info("warp: reached {} spawner {}", kVillage.level, kVillage.spawner);
 }
 
 bool on_command(void* menu, void* picked) {
-    if (!picked || game::field<std::string>(picked, kNodeCommand) != kCommand) {
+    std::optional<Location> target;
+    if (!menu || !picked) {
         return false;
     }
+    auto& command = game::field<std::string>(picked, kNodeCommand);
+
+    if (command == kCommandWStart) {
+        // get warp to start location
+        std::vector<std::string>* quests = game::quests_completed();
+        if (!quests) {
+            return false;
+        }
+
+        std::optional<Location> start = start_location(*quests);
+        if (!start) {
+            return false;
+        }
+        target = std::move(*start);
+    } else if (command == kCommandWVillage) {
+        target = kVillage;
+    }
+
+    if (!target) {
+        return false;
+    }
+
     uint8_t* globals = game::globals();
-    warp(globals);
+    warp(globals, *target);
     game_fn<ObjectFn>(&game::Build::pause_menu_close)(menu);
     game_fn<ObjectFn>(&game::Build::unpause)(globals);
     return true;

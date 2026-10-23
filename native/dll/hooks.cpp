@@ -69,7 +69,7 @@ uint64_t hook_beacon_use(void* beacon, void* b, void* c, void* d) {
     return result;
 }
 
-// The pause and main menu's command handler, for the pause menu's "Warp to Start".
+// The pause and main menu's command handler, for the pause menu's warp entries.
 uint64_t hook_pause_menu_command(void* menu, void* picked, void* c, void* d) {
     if (warp::on_command(menu, picked)) {
         return 0;
@@ -286,7 +286,7 @@ void append_address(std::vector<uint8_t>& bytes, const void* address) {
     bytes.insert(bytes.end(), first, first + sizeof(value));
 }
 
-// "Warp to Start": the builder calls hook_pause_menu_entries right before its "Exit to Main Menu" entry, and the
+// The warp entries: the builder calls hook_pause_menu_entries right before its "Exit to Main Menu" entry, and the
 // command handler it installs is pointed at hook_pause_menu_command.
 std::string patch_pause_menu(CodeCave& cave) {
     const game::Build& build = game::build();
@@ -305,7 +305,7 @@ std::string patch_pause_menu(CodeCave& cave) {
     std::array<uint8_t, 7> jump{0xe9, 0, 0, 0, 0, 0x90, 0x90};
     if (!patch(base + build.pause_menu_exit_entry, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
         !retarget(build.pause_menu_exit_entry + 1, build.pause_menu_exit_entry + 5, entries)) {
-        return "cannot add the Warp to Start entry to the pause menu";
+        return "cannot add the warp entries to the pause menu";
     }
     g_pause_menu_command = reinterpret_cast<GameFn>(base + build.pause_menu_command);
     if (!retarget(build.pause_menu_command_lea + 3, build.pause_menu_command_lea + 7, cave.jump_to(reinterpret_cast<void*>(&hook_pause_menu_command)))) {

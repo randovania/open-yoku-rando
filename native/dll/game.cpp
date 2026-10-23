@@ -133,6 +133,14 @@ std::vector<std::string>* quests_completed() {
     return data ? &field<std::vector<std::string>>(data, globals_offset::quests_completed) : nullptr;
 }
 
+std::vector<std::string>* randovania_quests() {
+    std::vector<std::string>* quests = quests_completed();
+    if (!quests || std::ranges::none_of(*quests, [](const std::string& quest) { return quest.starts_with(kIdentifierPrefix); })) {
+        return nullptr;
+    }
+    return quests;
+}
+
 void inventory_add(const std::string& item) {
     game_fn<InventoryAddFn, &Build::inventory_add>()(globals() + globals_offset::inventory, inventory_id(item));
 }

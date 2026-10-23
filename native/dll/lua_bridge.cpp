@@ -8,6 +8,7 @@
 #include "overlay.hpp"
 #include "new_game.hpp"
 #include "remote_api.hpp"
+#include "warp.hpp"
 
 #include <windows.h>
 
@@ -380,6 +381,7 @@ void on_tick() {
     g_have_frame = true;
 
     multiworld::update_inventory_index();
+    warp::on_tick();
 
     // Only in a level, on a frame the game really ran (not paused) and with no dialog open.
     // A give waits for the message before it, so items arrive one at a time, each with its own message.

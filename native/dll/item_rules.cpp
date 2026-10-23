@@ -60,11 +60,6 @@ std::string marker(const std::string& item) {
     return std::string(kIdentifierPrefix) + "rules:" + item;
 }
 
-// Only in a save the patcher made, so another randomizer game's save is never written to.
-bool our_save(const std::vector<std::string>& quests) {
-    return std::ranges::any_of(quests, [](const std::string& quest) { return quest.starts_with(kIdentifierPrefix); });
-}
-
 bool rules_ran(const std::vector<std::string>& quests, const std::string& item) {
     return std::ranges::find(quests, marker(item)) != quests.end();
 }
@@ -92,16 +87,16 @@ void run(std::vector<std::string>& quests, const std::string& item) {
 }  // namespace
 
 void note_item_rules_ran(const std::string& item) {
-    std::vector<std::string>* quests = quests_completed();
+    std::vector<std::string>* quests = randovania_quests();
     // A queued action is left to check_item_rules, which runs the rules again once the queue has applied it.
-    if (globals() && quests && our_save(*quests) && has_rules(item) && !rules_ran(*quests, item) && !still_queued(item)) {
+    if (quests && has_rules(item) && !rules_ran(*quests, item) && !still_queued(item)) {
         quests->push_back(marker(item));
     }
 }
 
 void check_item_rules(bool running) {
-    std::vector<std::string>* quests = running && globals() ? quests_completed() : nullptr;
-    if (!quests || !our_save(*quests) || !can_run()) {
+    std::vector<std::string>* quests = running ? randovania_quests() : nullptr;
+    if (!quests || !can_run()) {
         return;
     }
     for (const ItemRule& rule : rules()) {
