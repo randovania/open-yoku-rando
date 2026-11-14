@@ -46,8 +46,6 @@ uint64_t hook_tick(void* a, void* b, void* c, void* d) {
 
 uint64_t hook_pickup_dialog(void* bubble, void* b, void* c, void* d) {
     std::string replaced = game::upgrade_pickup_stage(bubble);
-    // mark_collected has run this item's onpickup rules already.
-    game::note_item_rules_ran(game::field<std::string>(bubble, game::pickup_offset::item));
     game::on_bubble_pickup(bubble);
     uint64_t result = g_pickup_dialog(bubble, b, c, d);
     game::end_bubble_pickup();

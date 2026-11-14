@@ -189,9 +189,6 @@ bool dialog_open();
 void show_dialog(const std::string& title, const std::string& text);
 
 // The `onpickup <item>` rules of randomizer_scripts.csv, see item_rules.cpp.
-// For a pickup of the game's own: mark_collected ran the rules already, so only the save marker is set, unless the
-// game queued an action.
-void note_item_rules_ran(const std::string& item);
 // Per tick: runs the rules of held items that still need them, only when `running`.
 void check_item_rules(bool running);
 
