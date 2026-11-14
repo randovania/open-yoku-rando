@@ -1,6 +1,7 @@
 // The `onpickup <item>` rules of randomizer_scripts.csv (e.g. the Underbelly key setting "has key"), which the game
 // only runs for its own pickups. Run here for held items without a save marker; the marker is set only when applied
 // directly, because the game's queue for unloaded levels is not saved.
+// This also runs after the game's own pickups, because the game does not always apply them.
 
 #include "game.hpp"
 #include "log.hpp"
@@ -43,10 +44,6 @@ std::span<const ItemRule> rules() {
     return field<std::vector<ItemRule>>(randomizer_state(), kStateItemRules);
 }
 
-bool has_rules(const std::string& item) {
-    return std::ranges::any_of(rules(), [&](const ItemRule& rule) { return rule.item == item; });
-}
-
 bool queued_in_game(int32_t target) {
     auto& pending = field<std::vector<PendingAction>>(randomizer_state(), kStatePendingActions);
     return std::ranges::any_of(pending, [&](const PendingAction& action) { return action.target == target; });
@@ -85,14 +82,6 @@ void run(std::vector<std::string>& quests, const std::string& item) {
 }
 
 }  // namespace
-
-void note_item_rules_ran(const std::string& item) {
-    std::vector<std::string>* quests = randovania_quests();
-    // A queued action is left to check_item_rules, which runs the rules again once the queue has applied it.
-    if (quests && has_rules(item) && !rules_ran(*quests, item) && !still_queued(item)) {
-        quests->push_back(marker(item));
-    }
-}
 
 void check_item_rules(bool running) {
     std::vector<std::string>* quests = running ? randovania_quests() : nullptr;
