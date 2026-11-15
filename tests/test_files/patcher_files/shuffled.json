@@ -1002,6 +1002,10 @@
         {
             "location": "jungle_slug_struggle:3411",
             "item": "wickerling"
+        },
+        {
+            "location": "peak_filthy_flat:2632",
+            "item": "reward_fruit_big"
         }
     ],
     "starting_items": {}

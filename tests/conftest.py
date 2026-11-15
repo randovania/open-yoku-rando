@@ -5,10 +5,23 @@ from pathlib import Path
 import pytest
 
 from open_yoku_rando import running_game
-from open_yoku_rando.game_install import randomizer_csv_path
+from open_yoku_rando.game_install import level_json_path, randomizer_csv_path, scripts_csv_path
 from open_yoku_rando.locations import load_locations
 
 _FAIL_INSTEAD_OF_SKIP = False
+
+CEREMONY = b'function self.instruments_2() triggerOutput("visit_nim") dialogBegin("nim") dialogLine(94) dialogEnd() end'
+GAME_SCRIPTS = b"replace_script\thub_festival:1\t" + CEREMONY + b"\r\n"
+"""A randomizer_scripts.csv with Nim's ceremony, as the game's own has it."""
+
+TUNGUSKA_SCRIPT = (
+    "function self.talk3()\n"
+    '    dialogBegin("tunguska") -- the reward talk\n'
+    "    dialogLine(3)\n"
+    '    triggerOutput("talk3done")\n'
+    "end\n"
+)
+TUNGUSKA_OBJECT = {"id": 1030, "script": TUNGUSKA_SCRIPT}
 
 
 def get_env_or_skip(env_name: str) -> str:
@@ -68,10 +81,15 @@ def fake_game_path(tmp_path) -> Path:
             "1" if location.spawn else "",
         ])
         for location in load_locations()
+        if not location.added
     )
     csv_path = randomizer_csv_path(game_path)
     csv_path.parent.mkdir(parents=True)
     csv_path.write_bytes("\r\n".join(lines).encode("utf-8"))
+    scripts_csv_path(game_path).write_bytes(GAME_SCRIPTS)
+    level_path = level_json_path(game_path, "peak_filthy_flat")
+    level_path.parent.mkdir(parents=True)
+    level_path.write_bytes(json.dumps({"objects": [TUNGUSKA_OBJECT]}).encode("utf-8") + b"\0")
     # A game file the patcher must leave alone.
     strings_path = game_path.joinpath("processed", "text", "dialog_en.strings")
     strings_path.parent.mkdir(parents=True)
