@@ -1,7 +1,9 @@
 // The `onpickup <item>` rules of randomizer_scripts.csv (e.g. the Underbelly key setting "has key"), which the game
 // only runs for its own pickups. Run here for held items without a save marker; the marker is set only when applied
-// directly, because the game's queue for unloaded levels is not saved.
-// This also runs after the game's own pickups, because the game does not always apply them.
+// directly. A rule for an unloaded level goes into the game's queue (saved as `randomizer_impulses`) and is run again
+// once that queue no longer holds it.
+// This also runs after the game's own pickups, because the game runs them only for pickup_item holders, not for
+// objectives (trial scarabs) or bubble_spawners.
 
 #include "item_rules.hpp"
 
