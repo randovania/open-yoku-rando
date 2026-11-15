@@ -3,8 +3,8 @@ Installs the mod into the game folder without changing a file of the game.
 
 Everything goes into MOD_FOLDER, except the xinput9_1_0.dll proxy, which Windows only finds next to Yoku.exe:
 - `open_yoku_rando.dll`, which the proxy starts;
-- `texts.strings`, the Nothing texts, each location's line (`items/nothing_<location id>_1`) and the TEXT_FIXES,
-  which the DLL sets in the dialog table;
+- `texts.strings`, the Nothing texts, each location's line (`items/nothing_<location id>_1`), the TEXT_FIXES and
+  the NPC lines naming their reward's category (category_lines.json), which the DLL sets in the dialog table;
 - `items/<id>_x102.sim`, models the DLL serves in place of `processed/items/<name>`;
 - `randomizer_scripts.csv`, the game's own with the mod's script changes, which the DLL serves in place of
   `data/text/randomizer_scripts.csv`;
@@ -14,6 +14,7 @@ Everything goes into MOD_FOLDER, except the xinput9_1_0.dll proxy, which Windows
 """
 
 import dataclasses
+import functools
 import json
 from pathlib import Path
 
@@ -184,8 +185,41 @@ TEXT_FIXES = {
     # Fosfor sends a player without the Old Postal Badge to Posterodactyl, who only has it in vanilla
     "fosfor_11": "As much as I want those <style1>Cove Mushrooms</style1>. "
                  "First you need the <style3>Old Postal Badge</style>.",
+    "willo_peak_1b": "I've located the next clue, it's somewhere around here!",
+    "willo_peak_5": "What are you waiting for? Let's break that icicle and crack the ice!",
+    "willo_peak_6": "...That didn't go as planned. I'm afraid I don't do tricks involving water, "
+                    "so you're gonna have to dive in yourself!",
 }
 """Dialog lines that are wrong in a randomizer, by key; English only, the DLL keeps the game in English."""
+
+
+@dataclasses.dataclass(frozen=True)
+class CategoryLine:
+    """An NPC line that names the category of the item the NPC hands out, see files/category_lines.json."""
+
+    key: str
+    location: str
+    """The spawn id of the location whose pickup the line is about."""
+    template: str
+    """
+    The line. `{a_cat}` stands for the category's determiner plus its noun, `{the_cat}` for "the " plus the noun.
+    Where the game has alternative lines under the key, the DLL sets every one of them to it.
+    """
+
+    def fill(self, category: dict[str, str]) -> str:
+        noun = category["noun"]
+        return self.template.replace("{a_cat}", category["determiner"] + noun).replace("{the_cat}", f"the {noun}")
+
+
+@functools.cache
+def load_category_lines() -> tuple[CategoryLine, ...]:
+    with files_path().joinpath("category_lines.json").open(encoding="utf-8") as f:
+        return tuple(CategoryLine(**entry) for entry in json.load(f))
+
+
+def category_strings(categories: dict[str, dict[str, str]]) -> list[tuple[str, str]]:
+    """The category lines filled from `categories` (spawn id -> category)."""
+    return [(line.key, line.fill(categories[line.location])) for line in load_category_lines()]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -208,14 +242,15 @@ def install_files(
     game_path: Path,
     models: dict[str, bytes],
     captions: dict[int, str],
+    categories: dict[str, dict[str, str]],
     required_beacons: int = 0,
 ) -> Install:
     """
     Installs the DLLs, one `.sim` per entry in `models` and the texts, replacing a previous install.
 
     `models` maps the game item id to the `.sim` its bubbles show (see model_data); `captions` maps a location id
-    to that location's dialog line. With `required_beacons`, Nim starts the ceremony only once that many beacons are
-    lit.
+    to that location's dialog line; `categories` maps a spawn id to the category of its pickup, which the NPC handing
+    it out names. With `required_beacons`, Nim starts the ceremony only once that many beacons are lit.
     """
     # Read every source first, so a missing package file fails before the install is touched.
     contents = {target: installed_file_source(source).read_bytes() for target, source in NATIVE_FILES.items()}
@@ -229,6 +264,7 @@ def install_files(
         contents[ANIMS_PATH] = animate_hint(dialog_anims_path(game_path).read_bytes())
         texts.append((f"nim_{BEACON_HINT_LINE}", beacon_hint(required_beacons)))
     texts.extend(TEXT_FIXES.items())
+    texts.extend(category_strings(categories))
     contents[TEXTS_PATH] = strings_file(texts)
 
     removed = []

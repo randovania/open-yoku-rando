@@ -124,11 +124,32 @@
                 "model": {
                     "description": "Which model the bubble shows. Only for a \"nothing\" pickup; every other item brings its own.",
                     "$ref": "#/$defs/item_id"
+                },
+                "category": {
+                    "type": "object",
+                    "description": "The item's category, which NPCs who hand out this pickup name.",
+                    "additionalProperties": false,
+                    "properties": {
+                        "determiner": {
+                            "type": "string",
+                            "description": "Comes before the noun, with its trailing space: \"a \", \"an \", \"some \".",
+                            "pattern": "^[^\\t\\r\\n]*$"
+                        },
+                        "noun": {
+                            "type": "string",
+                            "pattern": "^[^\\t\\r\\n]*$"
+                        }
+                    },
+                    "required": [
+                        "determiner",
+                        "noun"
+                    ]
                 }
             },
             "required": [
                 "location",
-                "item"
+                "item",
+                "category"
             ]
         },
         "starting_item_id": {

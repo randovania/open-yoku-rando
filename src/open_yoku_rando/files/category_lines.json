@@ -1,0 +1,242 @@
+[
+    {
+        "key": "posterodactylus_2b",
+        "location": "intro_landing:5622",
+        "template": "Before I leave, take {a_cat}! And once you find my <style3>Old Postal Badge</style>, deliver it to <style1>Nim the Translator</style> in the Village!"
+    },
+    {
+        "key": "kickback_2b",
+        "location": "jungle_canyon_caper:2679",
+        "template": "Here, take {a_cat} as thanks for letting me out!"
+    },
+    {
+        "key": "skeeper_2",
+        "location": "jungle_slug_struggle:3564",
+        "template": "I've got {a_cat} for sale! Yours for <style2>100</style> fruits!"
+    },
+    {
+        "key": "skeeper_4b",
+        "location": "jungle_slug_struggle:3564",
+        "template": "Tell you what, why don't you take {the_cat} and come back and pay me whenever you can, okay?"
+    },
+    {
+        "key": "dusk_6b",
+        "location": "jungle_spikey_stockade:206",
+        "template": "Please accept {a_cat} as your reward. You have earned it by showing you are sympathetic to our <style5>Rage</style5>."
+    },
+    {
+        "key": "dusk_6c",
+        "location": "jungle_spikey_stockade:206",
+        "template": "May it serve you well on your travels."
+    },
+    {
+        "key": "gardener_3",
+        "location": "jungle_misty_meadow:2378",
+        "template": "...I left {a_cat} <style2>In My Shed</style>."
+    },
+    {
+        "key": "gardener_4",
+        "location": "jungle_misty_meadow:2378",
+        "template": "If you can get there, you're free to take it."
+    },
+    {
+        "key": "hairy_1b",
+        "location": "intro_landing:6118",
+        "template": "The lazy slob who used to live here left {a_cat} behind."
+    },
+    {
+        "key": "parrot_3",
+        "location": "hub_village:4159",
+        "template": "So the gig is pretty easy. I've left you {a_cat} with the Parrot."
+    },
+    {
+        "key": "parrot_10",
+        "location": "hub_village:4661",
+        "template": "And since you have completed all of the postal duties, {the_cat} in the attic is yours. Go ahead and claim it! Squawk!"
+    },
+    {
+        "key": "parrot_12",
+        "location": "hub_village:4661",
+        "template": "Go ahead and claim {the_cat} in the attic!"
+    },
+    {
+        "key": "nim_93",
+        "location": "hub_festival:3819",
+        "template": "Here, take {a_cat} for the journey. You'll need a key to get inside."
+    },
+    {
+        "key": "rinri_4e",
+        "location": "hub_village:3828",
+        "template": "Here, take {a_cat}. And find our spores! We'll give you a reward once you've infected- we mean planted them above!"
+    },
+    {
+        "key": "rinri_12",
+        "location": "hub_village:4544",
+        "template": "We hope {the_cat} serves you well!"
+    },
+    {
+        "key": "rinri_12b",
+        "location": "hub_village:4544",
+        "template": "Come back and visit us Fungoids sometime!"
+    },
+    {
+        "key": "rinri_above_2c",
+        "location": "hub_festival_upper:491",
+        "template": "Take {a_cat} for your help! If you find our spores, plant them in the woods below. Somewhere <style1>Damp</style1> where we can gaze upon the impressive <style1>Statues</style1>."
+    },
+    {
+        "key": "rinri_jungle_2",
+        "location": "jungle_slug_struggle:3665",
+        "template": "Take {a_cat}! And if you find our spores, spread them someplace <style2>Dryer</style> next!"
+    },
+    {
+        "key": "rinri_cave_2",
+        "location": "cave_east_bay_shore:804",
+        "template": "Take {a_cat}! We need some peace and quiet now: if you find our spores, a <style1>Frigid</style1>, lonesome spot, <style1>Far Above</style1> the bustle of the Island will do!"
+    },
+    {
+        "key": "rinri_peak_2",
+        "location": "peak_guano_grief:2514",
+        "template": "Okay, we've had it with cold, noise and dampness! Take {a_cat}, and if you find our spores, take them somewhere <style1>Hot, Dry and Quiet</style1>!"
+    },
+    {
+        "key": "chirp_10",
+        "location": "peak_aerial_ascent:4033",
+        "template": "There you go, all sorted! Take {a_cat} for your trouble."
+    },
+    {
+        "key": "dive_fish_1c",
+        "location": "spring_bubbly_basin:1154",
+        "template": "Please, let me show my appreciation for what you've done with {a_cat}!"
+    },
+    {
+        "key": "zo_2",
+        "location": "spring_cloudburst_cliffs:5014",
+        "template": "So there was {a_cat} inside? Just as well that I didn't get it myself then."
+    },
+    {
+        "key": "splank_1b",
+        "location": "spring_gangway_grotto:4725",
+        "template": "...And I just happen to have {a_cat} that could bring someone good fortune."
+    },
+    {
+        "key": "splank_2",
+        "location": "spring_gangway_grotto:4725",
+        "template": "Do you want to buy {the_cat} for <style1>300</style1> Fruit?"
+    },
+    {
+        "key": "jojo_3c",
+        "location": "spring_gangway_grotto:4531",
+        "template": "Here, take {a_cat}. You'll need the <style1>Key</style> to the gate of the Underbelly <style2>Below Our Hideout</style>. You can't miss it!"
+    },
+    {
+        "key": "sush_8",
+        "location": "spring_gangway_grotto:4415",
+        "template": "Fine, take {a_cat} - It's the last thing I've got on me, just get out of my hiding place, okay?"
+    },
+    {
+        "key": "quinbe_3b",
+        "location": "cave_east_bay_shore:648",
+        "template": "I just don't need it anymore. Here, take {a_cat} for your trouble instead!"
+    },
+    {
+        "key": "liquorice_2",
+        "location": "cave_temple_terror_lower:4997",
+        "template": "I got {a_cat} here. 200 Fruits."
+    },
+    {
+        "key": "fleek_4",
+        "location": "hub_cliffside_creek:555",
+        "template": "Here buddy, have {a_cat} for keeping it <style5>Natural</style5>!"
+    },
+    {
+        "key": "tunguska_4b",
+        "location": "peak_filthy_flat:2813",
+        "template": "I can tell that you respect the <style6>Sootlings</style>, so as thanks for your help I want you to have {a_cat}."
+    },
+    {
+        "key": "tunguska_4c",
+        "location": "peak_filthy_flat:2813",
+        "template": "If you ever find a <style2>Sootling Leash</style2>, take it to the <style6>Sootling</style6> habitat in Frostpine Forest."
+    },
+    {
+        "key": "tunguska_5",
+        "location": "peak_filthy_flat:2813",
+        "template": "You'll find it in my old trunk out back. I've unlocked the door for you so go right ahead. It's yours."
+    },
+    {
+        "key": "sumoe_1b",
+        "location": "peak_crystal_crater:2908",
+        "template": "I swiped {a_cat} from Spina's private stash. Made it all the way up here before I realized I've got no use for it."
+    },
+    {
+        "key": "sumoe_1c",
+        "location": "peak_crystal_crater:2908",
+        "template": "Must be worth something though!"
+    },
+    {
+        "key": "sumoe_2",
+        "location": "peak_crystal_crater:2908",
+        "template": "So what do you say? I'll part with {the_cat} for the tiny sum of 300 fruit."
+    },
+    {
+        "key": "sumoe_7",
+        "location": "peak_crystal_crater:2908",
+        "template": "Spina won't notice it missing, there are hundreds of things in the stash."
+    },
+    {
+        "key": "jamja_camp_6",
+        "location": "peak_beanstalk_base:3171",
+        "template": "Yoku, take {a_cat}! And find a bucket and fill it with some <style3>Fresh Spring Water</style3>, from the hot springs over to the right."
+    },
+    {
+        "key": "tilo_guano_3",
+        "location": "peak_guano_grief:669",
+        "template": "Oh, you just scooped up {the_cat} just like that huh?"
+    },
+    {
+        "key": "tilo_guano_3b",
+        "location": "peak_guano_grief:669",
+        "template": "Well, I'll just head on back to camp. I'll uh, see you there!"
+    },
+    {
+        "key": "willo_willy_4d",
+        "location": "jungle_willy:1219",
+        "template": "Keep {the_cat} you just knocked loose. I'm trying to solve a puzzle, and the clues are <style2>Chunks</style> of a statue."
+    },
+    {
+        "key": "willo_willy_4e",
+        "location": "jungle_willy:1219",
+        "template": "Tell you what, bring any <style2>Chunks</style> you find over to my house in the Village and I'll let you in on this mystery!"
+    },
+    {
+        "key": "willo_temple_1b",
+        "location": "cave_temple_terror_lower:4744",
+        "template": "According to my scrying, {a_cat} is nearby!"
+    },
+    {
+        "key": "willo_temple_1c",
+        "location": "cave_temple_terror_lower:4744",
+        "template": "This button is the first part of the sequence. I'll keep it pressed down while you go searching for {the_cat}! Keep your eyes peeled for its magical gleam below!"
+    },
+    {
+        "key": "willo_temple_2",
+        "location": "cave_temple_terror_lower:4744",
+        "template": "Trouble finding {the_cat}? It should be somewhere below! Look for its magical gleam!"
+    },
+    {
+        "key": "willo_temple_3",
+        "location": "cave_temple_terror_lower:4744",
+        "template": "Fine work, assistant! We shall wipe the smugness off Umbaba's face yet!"
+    },
+    {
+        "key": "willo_sky_1",
+        "location": "hub_obtainium_outland:234",
+        "template": "Ahh there it is, {the_cat}. Once again in plain sight and just out of reach."
+    },
+    {
+        "key": "willo_sky_4",
+        "location": "hub_obtainium_outland:234",
+        "template": "Excellent! Quickly, let's head back to the tent!"
+    }
+]

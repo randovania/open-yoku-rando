@@ -84,7 +84,8 @@ def patch_game(input_path: Path, configuration: dict) -> None:
     required_beacons = configuration["required_beacons"]
     if required_beacons:
         LOG.info("Nim starts the ceremony once %d beacon(s) are lit", required_beacons)
-    install = game_files.install_files(input_path, models, captions, required_beacons)
+    categories = {pickup["location"]: pickup["category"] for pickup in configuration["pickups"]}
+    install = game_files.install_files(input_path, models, captions, categories, required_beacons)
     LOG.info("Installed %d file(s), removed %d unused file(s); no file of the game was changed",
              len(install.written), len(install.removed))
 

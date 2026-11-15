@@ -30,8 +30,8 @@ struct MenuEntry {
 // Reads the seed file once at install time; the patcher only runs while the game is closed.
 MenuEntry prepare_menu();
 const std::string& menu_text();
-// open-yoku-rando/texts.strings ("key;value" lines): Nothing texts, location lines and fixed game lines, set in the
-// dialog table by the tick.
+// open-yoku-rando/texts.strings ("key;value" lines): Nothing texts, location lines, fixed game lines and NPC lines
+// naming the category of their reward, set in the dialog table by the tick.
 const std::vector<std::pair<std::string, std::string>>& texts();
 // seed info read from the input file
 const std::optional<SeedInfo>& seed_info();
