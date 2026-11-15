@@ -28,6 +28,7 @@ add_library(open_yoku_rando SHARED
     dll/item_rules.cpp
     dll/log.cpp
     dll/lua_bridge.cpp
+    dll/markers.cpp
     dll/messages.cpp
     dll/multiworld.cpp
     dll/new_game.cpp

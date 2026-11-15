@@ -22,7 +22,7 @@ inline constexpr uintptr_t level_loading = 0x3630;  // non-null while a level lo
 inline constexpr uintptr_t save_flags = 0x1f06c;    // bit 0: the game saves nothing
 inline constexpr uintptr_t ui_texts = 0x8fd0;       // what ui_text looks keys up in; starts with the loaded language
 inline constexpr uintptr_t inventory = 0x29e8;  // std::vector<InventoryItem>
-// std::vector<std::string>; the game keeps entries it does not know, which is how the patcher marks a save.
+// std::vector<std::string>; the game keeps entries it does not know, so the DLL stores its save markers here
 inline constexpr uintptr_t quests_completed = 0x2688;
 inline constexpr uintptr_t randomizer_entries = 0x35d8;  // std::vector<RandomizerEntry>, in save order
 inline constexpr uintptr_t frame_counter = 0x2028;       // uint32
@@ -62,11 +62,6 @@ inline constexpr uintptr_t item = 0x230;  // std::string, the item id
 }  // namespace pickup_offset
 inline constexpr uintptr_t level_info_offset = 0x6e0;   // level object -> level info
 inline constexpr uintptr_t level_number_offset = 0x20;  // level info -> uint32 level number
-
-// The marker the patcher puts into `quests_completed`, followed by the configuration identifier.
-inline constexpr std::string_view kIdentifierPrefix = "@open-yoku-rando:";
-// The marker that holds Randovania's layout UUID, followed by the UUID.
-inline constexpr std::string_view kLayoutUuidPrefix = "@open-yoku-rando:uuid:";
 
 // Item id of a location holding nothing the game knows; see docs/multiworld-state.md.
 inline constexpr const char* nothing_item = "nothing";
@@ -139,12 +134,8 @@ std::span<const InventoryItem> inventory();
 // Same value as the getItemCount native.
 int32_t item_count(const std::string& item);
 
-// The save's `quests_completed`; null before the globals exist. Only for new_game, which makes a save a Randovania
-// save by writing the identifier; everything else uses randovania_quests.
+// The save's `quests_completed`; null before the globals exist. Only for markers.cpp; everything else goes through it.
 std::vector<std::string>* quests_completed();
-// The save's `quests_completed` if the save was started from a Randovania seed (it has a kIdentifierPrefix marker);
-// null otherwise. Other code takes any of our markers as a sign of such a save, so other saves must never get one.
-std::vector<std::string>* randovania_quests();
 
 void inventory_add(const std::string& item);
 

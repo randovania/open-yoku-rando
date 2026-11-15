@@ -5,12 +5,9 @@
 #include <string_view>
 
 // Pause menu warps in a Randovania save: save, then continue at the target.
-// Start = the seed's start location (marker set by new_game); Village = hub_village checkpoint 4226, once reached
-// (before that, it opens a message with "OK").
+// Start = the seed's start location (markers::kStart, set by new_game); Village = hub_village checkpoint 4226, once
+// reached (markers::kReached; before that, it opens a message with "OK").
 namespace oyr::warp {
-
-inline constexpr std::string_view kStartPrefix = "@open-yoku-rando:start:";
-inline constexpr std::string_view kReachedPrefix = "@open-yoku-rando:reached:";
 
 struct Location {
     std::string level;

@@ -5,6 +5,7 @@
 
 #include "game.hpp"
 #include "log.hpp"
+#include "markers.hpp"
 
 #include <algorithm>
 #include <span>
@@ -54,11 +55,7 @@ bool still_queued(const std::string& item) {
 }
 
 std::string marker(const std::string& item) {
-    return std::string(kIdentifierPrefix) + "rules:" + item;
-}
-
-bool rules_ran(const std::vector<std::string>& quests, const std::string& item) {
-    return std::ranges::find(quests, marker(item)) != quests.end();
+    return std::string(markers::kRules) + item;
 }
 
 // item_rule_action finds the target's level on the main map, reached through whichever level is being played.
@@ -67,7 +64,7 @@ bool can_run() {
     return level && field<void*>(level, kLevelMainMap);
 }
 
-void run(std::vector<std::string>& quests, const std::string& item) {
+void run(const std::string& item) {
     for (const ItemRule& rule : rules()) {
         if (rule.item == item) {
             item_rule_action(randomizer_state(), rule.target, rule.action.c_str());
@@ -77,21 +74,20 @@ void run(std::vector<std::string>& quests, const std::string& item) {
         log::info("{}: rules queued until their level loads", item);
     } else {
         log::info("{}: rules applied", item);
-        quests.push_back(marker(item));
+        markers::add(marker(item));
     }
 }
 
 }  // namespace
 
 void check_item_rules(bool running) {
-    std::vector<std::string>* quests = running ? randovania_quests() : nullptr;
-    if (!quests || !can_run()) {
+    if (!running || !markers::in_randovania_save() || !can_run()) {
         return;
     }
     for (const ItemRule& rule : rules()) {
         const std::string& item = rule.item;
-        if (item_count(item) > 0 && !rules_ran(*quests, item) && !still_queued(item)) {
-            run(*quests, item);
+        if (item_count(item) > 0 && !markers::has(marker(item)) && !still_queued(item)) {
+            run(item);
         }
     }
 }

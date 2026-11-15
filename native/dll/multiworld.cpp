@@ -3,9 +3,9 @@
 #include "game.hpp"
 #include "goal.hpp"
 #include "log.hpp"
+#include "markers.hpp"
 #include "remote_api.hpp"
 
-#include <algorithm>
 #include <charconv>
 #include <cstdint>
 #include <format>
@@ -15,9 +15,6 @@
 
 namespace oyr::multiworld {
 namespace {
-
-// The received count is kept in the save's quests_completed, so a reload cannot deliver twice.
-constexpr std::string_view kReceivedPrefix = "@open-yoku-rando:received:";
 
 // Twice a second at the game's 60 Hz, which is what Randovania's other games poll at.
 constexpr uint32_t kTicksBetweenPolls = 30;
@@ -170,7 +167,7 @@ size_t set_inventory_items(std::string_view items) {
 }
 
 void set_identifier(std::string_view identifier) {
-    g_identifier_marker = identifier.empty() ? std::string() : std::string(game::kIdentifierPrefix) + std::string(identifier);
+    g_identifier_marker = identifier.empty() ? std::string() : std::string(markers::kPrefix) + std::string(identifier);
     g_reported_other_save = false;
     forget_what_was_sent();
 }
@@ -206,8 +203,7 @@ bool save_matches() {
     if (g_identifier_marker.empty()) {
         return true;
     }
-    const std::vector<std::string>* quests = game::randovania_quests();
-    bool matches = quests && std::ranges::find(*quests, g_identifier_marker) != quests->end();
+    bool matches = markers::has(g_identifier_marker);
     if (!matches && !g_reported_other_save) {
         g_reported_other_save = true;
         log::info("the loaded save is not {}; reporting nothing for it", g_identifier_marker);
@@ -216,53 +212,25 @@ bool save_matches() {
 }
 
 std::string layout_uuid() {
-    const std::vector<std::string>* quests = game::randovania_quests();
-    if (!quests) {
-        return {};
-    }
-    for (const std::string& quest : *quests) {
-        if (quest.starts_with(game::kLayoutUuidPrefix)) {
-            return quest.substr(game::kLayoutUuidPrefix.size());
-        }
-    }
-    return {};
+    return markers::value(markers::kLayoutUuid).value_or(std::string());
 }
 
 size_t received_count() {
-    const std::vector<std::string>* quests = game::randovania_quests();
-    if (!quests) {
+    std::optional<std::string> digits = markers::value(markers::kReceived);
+    size_t value = 0;
+    if (!digits || std::from_chars(digits->data(), digits->data() + digits->size(), value).ec != std::errc{}) {
         return 0;
     }
-    for (const std::string& quest : *quests) {
-        if (!quest.starts_with(kReceivedPrefix)) {
-            continue;
-        }
-        size_t value = 0;
-        std::string_view digits = std::string_view(quest).substr(kReceivedPrefix.size());
-        if (std::from_chars(digits.data(), digits.data() + digits.size(), value).ec == std::errc{}) {
-            return value;
-        }
-    }
-    return 0;
+    return value;
 }
 
 void note_pickup_received() {
     if (!save_matches()) {
         return;
     }
-    std::vector<std::string>* quests = game::randovania_quests();
-    if (!quests) {
+    if (!markers::set(markers::kReceived, std::to_string(received_count() + 1))) {
         log::info("cannot record the received pickup: no Randovania save is loaded");
-        return;
     }
-    std::string marker = std::format("{}{}", kReceivedPrefix, received_count() + 1);
-    for (std::string& quest : *quests) {
-        if (quest.starts_with(kReceivedPrefix)) {
-            quest = marker;
-            return;
-        }
-    }
-    quests->push_back(marker);
 }
 
 void on_tick() {

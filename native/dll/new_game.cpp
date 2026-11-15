@@ -2,6 +2,7 @@
 
 #include "game.hpp"
 #include "log.hpp"
+#include "markers.hpp"
 #include "warp.hpp"
 
 #include <windows.h>
@@ -321,12 +322,11 @@ void after_loader(void* randomizer_state, bool new_game) {
     if (seed.fruit > 0) {
         game::add_fruit(seed.fruit);
     }
-    if (std::vector<std::string>* quests = game::quests_completed()) {
-        quests->push_back(std::string(game::kIdentifierPrefix) + seed.identifier);
+    if (markers::mark_save(seed.identifier)) {
         if (!seed.uuid.empty()) {
-            quests->push_back(std::string(game::kLayoutUuidPrefix) + seed.uuid);
+            markers::add(std::string(markers::kLayoutUuid) + seed.uuid);
         }
-        quests->push_back(warp::marker(seed.start_location));
+        markers::add(warp::marker(seed.start_location));
     }
     remember_seed(seed.seed, shown_hash(seed));
     log::info("started Randovania seed {} (seed {}) on thread {}: {} of {} locations placed, {} starting items, {} fruit", seed.identifier, seed.seed,

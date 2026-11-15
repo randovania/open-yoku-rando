@@ -2,12 +2,11 @@
 
 #include "game.hpp"
 #include "log.hpp"
+#include "markers.hpp"
 
-#include <algorithm>
 #include <charconv>
 #include <format>
 #include <optional>
-#include <vector>
 
 namespace oyr::warp {
 namespace {
@@ -95,22 +94,19 @@ void add_message_entry(void* root, const char* text, const char* message, const 
     method<AddEntryFn>(submenu, kAddEntry)(submenu, kCommandBack, ok, nullptr, nullptr);
 }
 
-std::optional<Location> start_location(const std::vector<std::string>& quests) {
-    for (const std::string& quest : quests) {
-        if (!quest.starts_with(kStartPrefix)) {
-            continue;
-        }
-        std::string_view rest = std::string_view(quest).substr(kStartPrefix.size());
-        size_t colon = rest.rfind(':');
-        int32_t spawner = 0;
-        if (colon == std::string_view::npos || colon == 0 ||
-            std::from_chars(rest.data() + colon + 1, rest.data() + rest.size(), spawner).ptr != rest.data() + rest.size()) {
-            log::info("warp: ignoring the malformed start location {}", quest);
-            continue;
-        }
-        return Location{std::string(rest.substr(0, colon)), spawner};
+std::optional<Location> start_location() {
+    std::optional<std::string> rest = markers::value(markers::kStart);
+    if (!rest) {
+        return std::nullopt;
     }
-    return std::nullopt;
+    size_t colon = rest->rfind(':');
+    int32_t spawner = 0;
+    if (colon == std::string::npos || colon == 0 ||
+        std::from_chars(rest->data() + colon + 1, rest->data() + rest->size(), spawner).ptr != rest->data() + rest->size()) {
+        log::info("warp: ignoring the malformed start location {}", *rest);
+        return std::nullopt;
+    }
+    return Location{rest->substr(0, colon), spawner};
 }
 
 // Why the game cannot be saved and continued right now; empty if it can.
@@ -146,31 +142,27 @@ void warp(uint8_t* globals, const Location& target) {
 }
 
 std::string reached_marker(const Location& location) {
-    return std::format("{}{}:{}", kReachedPrefix, location.level, location.spawner);
-}
-
-bool has_reached(const std::vector<std::string>& quests, const Location& location) {
-    return std::ranges::find(quests, reached_marker(location)) != quests.end();
+    return std::format("{}{}:{}", markers::kReached, location.level, location.spawner);
 }
 
 }  // namespace
 
 std::string marker(const Location& location) {
-    return std::format("{}{}:{}", kStartPrefix, location.level, location.spawner);
+    return std::format("{}{}:{}", markers::kStart, location.level, location.spawner);
 }
 
 void add_menu_entry(void* menu) {
     uint8_t* globals = game::globals();
-    std::vector<std::string>* quests = game::randovania_quests();
-    if (!menu || !globals || !quests || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer) {
+    if (!menu || !globals || !markers::in_randovania_save() ||
+        game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer) {
         return;
     }
-    
+
     void* root = static_cast<uint8_t*>(menu) + kMenuRoot;
 
     game::ensure_ui_string(kTextKeyStart, kTextStart);
     const char* text = ui_text(globals, kTextKeyStart);
-    if (text && start_location(*quests)) {
+    if (text && start_location()) {
         add_confirm_entry(root, text, kCommandWStart, globals);
     }
 
@@ -179,7 +171,7 @@ void add_menu_entry(void* menu) {
     if (!text) {
         return;
     }
-    if (has_reached(*quests, kVillage)) {
+    if (markers::has(reached_marker(kVillage))) {
         add_confirm_entry(root, text, kCommandWVillage, globals);
     } else {
         game::ensure_ui_string(kTextKeyVillageLocked, kTextVillageLocked);
@@ -199,12 +191,10 @@ void on_tick() {
         game::field<std::string>(globals, game::globals_offset::level) != kVillage.level) {
         return;
     }
-    std::vector<std::string>* quests = game::randovania_quests();
-    if (!quests || has_reached(*quests, kVillage)) {
-        return;
+    std::string reached = reached_marker(kVillage);
+    if (!markers::has(reached) && markers::add(std::move(reached))) {
+        log::info("warp: reached {} spawner {}", kVillage.level, kVillage.spawner);
     }
-    quests->push_back(reached_marker(kVillage));
-    log::info("warp: reached {} spawner {}", kVillage.level, kVillage.spawner);
 }
 
 bool on_command(void* menu, void* picked) {
@@ -215,17 +205,7 @@ bool on_command(void* menu, void* picked) {
     auto& command = game::field<std::string>(picked, kNodeCommand);
 
     if (command == kCommandWStart) {
-        // get warp to start location
-        std::vector<std::string>* quests = game::randovania_quests();
-        if (!quests) {
-            return false;
-        }
-
-        std::optional<Location> start = start_location(*quests);
-        if (!start) {
-            return false;
-        }
-        target = std::move(*start);
+        target = start_location();
     } else if (command == kCommandWVillage) {
         target = kVillage;
     }
