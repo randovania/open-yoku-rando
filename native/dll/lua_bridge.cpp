@@ -7,11 +7,11 @@
 #include "messages.hpp"
 #include "multiworld.hpp"
 #include "remote_api.hpp"
+#include "text.hpp"
 #include "tick.hpp"
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cstdint>
 #include <format>
 #include <optional>
@@ -89,12 +89,7 @@ int rl_log(lua_State* L) {
 
 // A number passed as a string, like RemoveItem's amount; empty when it is missing or not a number.
 std::optional<size_t> size_arg(lua_State* L, int index) {
-    const std::string text = string_arg(L, index);
-    size_t value = 0;
-    if (text.empty() || std::from_chars(text.data(), text.data() + text.size(), value).ec != std::errc{}) {
-        return std::nullopt;
-    }
-    return value;
+    return text::number<size_t>(string_arg(L, index));
 }
 
 // RL.GiveItem(item, text [, received, inventory])
@@ -110,10 +105,7 @@ int rl_show_message(lua_State* L) {
 
 // RL.RemoveItem(item [, amount]): the amount comes as a string, because that is what string_arg reads.
 int rl_remove_item(lua_State* L) {
-    const std::string amount = string_arg(L, 2);
-    int32_t count = 0;
-    std::from_chars(amount.data(), amount.data() + amount.size(), count);
-    items::queue_remove(string_arg(L, 1), count);
+    items::queue_remove(string_arg(L, 1), text::number<int32_t>(string_arg(L, 2)).value_or(0));
     return 0;
 }
 

@@ -4,6 +4,7 @@
 #include "log.hpp"
 #include "messages.hpp"
 #include "multiworld.hpp"
+#include "text.hpp"
 
 #include <algorithm>
 #include <deque>
@@ -36,15 +37,8 @@ struct Stage {
 };
 
 Stage next_stage(std::string_view progression) {
-    std::vector<std::string> stages;
-    for (size_t start = 0;;) {
-        size_t comma = progression.find(',', start);
-        stages.emplace_back(progression.substr(start, comma - start));
-        if (comma == std::string_view::npos) {
-            break;
-        }
-        start = comma + 1;
-    }
+    std::vector<std::string_view> fields = text::split(progression, ',');
+    std::vector<std::string> stages(fields.begin(), fields.end());
     size_t next = 0;
     for (size_t i = stages.size(); i-- > 0;) {
         if (game::item_count(stages[i]) > 0) {

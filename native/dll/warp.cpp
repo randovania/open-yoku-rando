@@ -3,8 +3,8 @@
 #include "game.hpp"
 #include "log.hpp"
 #include "markers.hpp"
+#include "text.hpp"
 
-#include <charconv>
 #include <format>
 #include <optional>
 
@@ -97,8 +97,7 @@ std::optional<Location> start_location() {
     }
     size_t colon = rest->rfind(':');
     int32_t spawner = 0;
-    if (colon == std::string::npos || colon == 0 ||
-        std::from_chars(rest->data() + colon + 1, rest->data() + rest->size(), spawner).ptr != rest->data() + rest->size()) {
+    if (colon == std::string::npos || colon == 0 || !text::parse_number(std::string_view(*rest).substr(colon + 1), spawner)) {
         log::info("warp: ignoring the malformed start location {}", *rest);
         return std::nullopt;
     }

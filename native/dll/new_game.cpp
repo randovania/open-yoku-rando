@@ -3,11 +3,11 @@
 #include "game.hpp"
 #include "log.hpp"
 #include "markers.hpp"
+#include "text.hpp"
 #include "warp.hpp"
 
 #include <windows.h>
 
-#include <charconv>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -49,23 +49,7 @@ fs::path seed_path() {
     return fs::path(exe).parent_path() / L"open-yoku-rando" / L"seed.txt";
 }
 
-template <class T>
-bool parse_number(std::string_view text, T& value) {
-    auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
-    return error == std::errc() && end == text.data() + text.size();
-}
-
-std::vector<std::string_view> split_tabs(std::string_view line) {
-    std::vector<std::string_view> fields;
-    for (size_t start = 0;;) {
-        size_t tab = line.find('\t', start);
-        fields.push_back(line.substr(start, tab - start));
-        if (tab == std::string_view::npos) {
-            return fields;
-        }
-        start = tab + 1;
-    }
-}
+using text::parse_number;
 
 // The patcher's seed file: UTF-8, one tab-separated record per line, '#' starts a comment line.
 //   format      1
@@ -81,20 +65,18 @@ std::vector<std::string_view> split_tabs(std::string_view line) {
 //   oyr_version    <version string>
 // Returns an error message, empty on success.
 std::string read_seed(const fs::path& path, Seed& seed) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
+    std::optional<std::vector<std::string>> lines = text::read_lines(path);
+    if (!lines) {
         return std::format("there is no seed file at {}", path.string());
     }
     int format = 0;
-    std::string line;
-    for (int number = 1; std::getline(file, line); ++number) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
+    for (size_t index = 0; index < lines->size(); ++index) {
+        const std::string& line = (*lines)[index];
+        const size_t number = index + 1;
         if (line.empty() || line.starts_with('#')) {
             continue;
         }
-        std::vector<std::string_view> f = split_tabs(line);
+        std::vector<std::string_view> f = text::split(line, '\t');
         bool ok = false;
         if (f[0] == "format" && f.size() == 2) {
             ok = parse_number(f[1], format);
@@ -155,12 +137,7 @@ std::vector<std::pair<std::string, std::string>> g_texts;
 
 void load_texts() {
     fs::path path = seed_path().parent_path() / L"texts.strings";
-    std::ifstream file(path, std::ios::binary);
-    std::string line;
-    while (std::getline(file, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
+    for (std::string& line : text::read_lines(path).value_or(std::vector<std::string>())) {
         // A UTF-8 byte order mark, as the game's own .strings files start with.
         if (line.size() >= 3 && static_cast<uint8_t>(line[0]) == 0xef && static_cast<uint8_t>(line[1]) == 0xbb && static_cast<uint8_t>(line[2]) == 0xbf) {
             line.erase(0, 3);
@@ -178,13 +155,8 @@ std::string shown_hash(const Seed& seed) {
 }
 
 void load_history() {
-    std::ifstream file(history_path(), std::ios::binary);
-    std::string line;
-    while (std::getline(file, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        std::vector<std::string_view> f = split_tabs(line);
+    for (const std::string& line : text::read_lines(history_path()).value_or(std::vector<std::string>())) {
+        std::vector<std::string_view> f = text::split(line, '\t');
         uint32_t number = 0;
         if (f.size() == 2 && parse_number(f[0], number) && !f[1].empty()) {
             g_hash_by_seed[number] = f[1];

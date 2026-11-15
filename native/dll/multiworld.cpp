@@ -5,8 +5,8 @@
 #include "log.hpp"
 #include "markers.hpp"
 #include "remote_api.hpp"
+#include "text.hpp"
 
-#include <charconv>
 #include <cstdint>
 #include <format>
 #include <optional>
@@ -41,19 +41,17 @@ bool g_reported_other_save = false;
 size_t g_inventory_index = 0;
 std::vector<int32_t> g_inventory_snapshot;
 
-size_t parse_list(std::string_view text, auto&& add) {
+// Passes every non-empty comma-separated field to `add`; how many there were, or 0 as soon as `add` rejects one.
+size_t parse_list(std::string_view list, auto&& add) {
     size_t count = 0;
-    for (size_t start = 0; start <= text.size();) {
-        size_t comma = text.find(',', start);
-        std::string_view field = text.substr(start, comma == std::string_view::npos ? comma : comma - start);
-        if (!field.empty() && !add(field)) {
+    for (std::string_view field : text::split(list, ',')) {
+        if (field.empty()) {
+            continue;
+        }
+        if (!add(field)) {
             return 0;
         }
-        count += field.empty() ? 0 : 1;
-        if (comma == std::string_view::npos) {
-            break;
-        }
-        start = comma + 1;
+        ++count;
     }
     return count;
 }
@@ -128,8 +126,7 @@ size_t set_locations(std::string_view ids) {
     std::vector<uint32_t> locations;
     size_t count = parse_list(ids, [&locations](std::string_view field) {
         uint32_t id = 0;
-        auto [end, error] = std::from_chars(field.data(), field.data() + field.size(), id);
-        if (error != std::errc{} || end != field.data() + field.size()) {
+        if (!text::parse_number(field, id)) {
             return false;
         }
         locations.push_back(id);
@@ -217,11 +214,7 @@ std::string layout_uuid() {
 
 size_t received_count() {
     std::optional<std::string> digits = markers::value(markers::kReceived);
-    size_t value = 0;
-    if (!digits || std::from_chars(digits->data(), digits->data() + digits->size(), value).ec != std::errc{}) {
-        return 0;
-    }
-    return value;
+    return digits ? text::number<size_t>(*digits).value_or(0) : 0;
 }
 
 void note_pickup_received() {
