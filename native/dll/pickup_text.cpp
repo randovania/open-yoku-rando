@@ -1,5 +1,7 @@
 // Shows each location's line (texts.strings: "items/nothing_<location>_1") when its pickup is collected.
 
+#include "pickup_text.hpp"
+
 #include "game.hpp"
 #include "log.hpp"
 
@@ -12,7 +14,8 @@
 #include <utility>
 #include <vector>
 
-namespace oyr::game {
+namespace oyr::pickup_text {
+using namespace game;
 namespace {
 
 // Each Nothing pickup overwrites "items/nothing_1"; the patcher's default is kept for locations without a line.
@@ -86,10 +89,6 @@ void show_location_text_for_item(const std::string& item, uint32_t location) {
 }
 
 }  // namespace
-
-bool is_nothing_item(const std::string& item) {
-    return item == nothing_item || item.starts_with(std::string(nothing_item) + "_");
-}
 
 const char* pickup_dialog_name(const char* game_name) {
     return g_pickup_dialog_name.empty() ? game_name : g_pickup_dialog_name.c_str();
@@ -169,4 +168,4 @@ std::optional<std::pair<std::string, std::string>> pop_location_dialog() {
     return dialog;
 }
 
-}  // namespace oyr::game
+}  // namespace oyr::pickup_text

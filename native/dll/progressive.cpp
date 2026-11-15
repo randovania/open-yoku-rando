@@ -1,3 +1,5 @@
+#include "progressive.hpp"
+
 #include "game.hpp"
 #include "log.hpp"
 
@@ -6,7 +8,8 @@
 #include <string_view>
 #include <utility>
 
-namespace oyr::game {
+namespace oyr::progressive {
+using namespace game;
 namespace {
 
 // The pairs the game itself treats as progressive, in the spawn code and in mark_collected (Epic 0x16b040).
@@ -37,4 +40,4 @@ void drop_replaced_stage(const std::string& base) {
     }
 }
 
-}  // namespace oyr::game
+}  // namespace oyr::progressive

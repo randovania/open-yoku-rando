@@ -72,6 +72,10 @@ std::span<T> vector_at(uintptr_t offset) {
 
 }  // namespace
 
+bool is_nothing_item(const std::string& item) {
+    return item == nothing_item || item.starts_with(std::string(nothing_item) + "_");
+}
+
 const char* inventory_id(const std::string& item) {
     return item == wickerling_item ? wickerling_inventory_id : item.c_str();
 }

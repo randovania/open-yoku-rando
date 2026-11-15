@@ -1,6 +1,7 @@
 #include "tick.hpp"
 
 #include "game.hpp"
+#include "item_rules.hpp"
 #include "items.hpp"
 #include "log.hpp"
 #include "lua_bridge.hpp"
@@ -8,6 +9,7 @@
 #include "multiworld.hpp"
 #include "new_game.hpp"
 #include "overlay.hpp"
+#include "pickup_text.hpp"
 #include "warp.hpp"
 
 #include <windows.h>
@@ -92,13 +94,13 @@ void on_tick() {
     warp::on_tick();
 
     items::on_tick(game::in_game() && quiet());
-    game::check_item_rules(quiet());
+    item_rules::on_tick(quiet());
     messages::on_tick(frame_ran);
 
     // A pickup the game shows no dialog for gets its location's line from here, under the same conditions.
-    game::watch_collected_locations();
+    pickup_text::watch_collected_locations();
     if (game::in_game() && quiet()) {
-        if (auto dialog = game::pop_location_dialog()) {
+        if (auto dialog = pickup_text::pop_location_dialog()) {
             game::show_dialog(dialog->first, dialog->second);
         }
     }

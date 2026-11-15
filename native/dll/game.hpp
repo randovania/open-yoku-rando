@@ -230,25 +230,6 @@ void add_fruit(int32_t amount);
 bool dialog_open();
 void show_dialog(const std::string& title, const std::string& text);
 
-// The `onpickup <item>` rules of randomizer_scripts.csv, see item_rules.cpp.
-// Per tick: runs the rules of held items that still need them, only when `running`.
-void check_item_rules(bool running);
-
-// Progressive pickups, see progressive.cpp. Before pickup_dialog: turns a base stage that is already held into its
-// upgrade and returns the base stage, else empty. After it: removes that base stage.
-std::string upgrade_pickup_stage(void* pickup);
-void drop_replaced_stage(const std::string& base);
-
-// Location texts at pickup, see pickup_text.cpp.
-// Called before pickup_dialog runs: puts the location's line in place and collapses "nothing_<model>" to "nothing".
-void on_bubble_pickup(void* pickup);
-// The dialog name pickup_dialog should open; valid until end_bubble_pickup.
-const char* pickup_dialog_name(const char* game_name);
-void end_bubble_pickup();
-// Per tick: queues the line of a location collected without pickup_dialog (a Wickerling).
-void watch_collected_locations();
-std::optional<std::pair<std::string, std::string>> pop_location_dialog();
-
 struct Native {
     std::string name;
     uintptr_t rva;

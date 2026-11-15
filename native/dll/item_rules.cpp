@@ -3,6 +3,8 @@
 // directly, because the game's queue for unloaded levels is not saved.
 // This also runs after the game's own pickups, because the game does not always apply them.
 
+#include "item_rules.hpp"
+
 #include "game.hpp"
 #include "log.hpp"
 #include "markers.hpp"
@@ -11,7 +13,8 @@
 #include <span>
 #include <string>
 
-namespace oyr::game {
+namespace oyr::item_rules {
+using namespace game;
 namespace {
 
 // Only called once can_run() found the game's globals, so randomizer_state() is not null.
@@ -53,7 +56,7 @@ void run(const std::string& item) {
 
 }  // namespace
 
-void check_item_rules(bool running) {
+void on_tick(bool running) {
     if (!running || !markers::in_randovania_save() || !can_run()) {
         return;
     }
@@ -65,4 +68,4 @@ void check_item_rules(bool running) {
     }
 }
 
-}  // namespace oyr::game
+}  // namespace oyr::item_rules
