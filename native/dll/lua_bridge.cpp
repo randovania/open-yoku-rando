@@ -189,9 +189,9 @@ bool create_state() {
     field<void*>(L, kStateCurrentObject) = nullptr;
     game::luaL_openlibs(L);
 
-    auto natives = game::find_natives();
+    const auto& natives = game::lua_natives();
     size_t registered = 0;
-    for (const game::Native& native : natives) {
+    for (const game::LuaNative& native : natives) {
         if (std::ranges::find(kSafeNatives, native.name) != kSafeNatives.end() &&
             set_global_function(L, native.name.c_str(), reinterpret_cast<lua_CFunction>(game::base() + native.rva))) {
             ++registered;

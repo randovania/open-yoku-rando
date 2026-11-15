@@ -12,6 +12,8 @@ namespace {
 
 uint8_t* g_base = nullptr;
 const Build* g_build = nullptr;
+// Set by verify(), then only read.
+std::vector<LuaNative> g_lua_natives;
 
 struct Prologue {
     const char* name;
@@ -136,6 +138,20 @@ uintptr_t call_target(uintptr_t site) {
     return site + 5 + read<int32_t>(site + 1);
 }
 
+// The natives registered in script_api_init, read from its registration code.
+std::vector<LuaNative> scan_lua_natives(const Build& b) {
+    std::vector<LuaNative> natives;
+    for (uintptr_t at = b.script_api_init; at + kRegistration.size() <= b.script_api_init_end; ++at) {
+        if (!matches(at, kRegistration) || at + 38 + read<int32_t>(at + 34) != b.lua_setglobal) {
+            continue;
+        }
+        uintptr_t function = at + 7 + read<int32_t>(at + 3);
+        uintptr_t name = at + 29 + read<int32_t>(at + 25);
+        natives.push_back({reinterpret_cast<const char*>(g_base + name), function, at});
+    }
+    return natives;
+}
+
 const Build* find_build() {
     auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(g_base);
     auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(g_base + dos->e_lfanew);
@@ -220,12 +236,12 @@ std::string check_code(const Build& b) {
             return std::format("{} build: code cave at {:#x} is in use; is another mod loaded?", b.name, address);
         }
     }
-    // find_natives reads through build().
-    g_build = &b;
-    if (find_natives().empty()) {
-        g_build = nullptr;
+    // Last: the checks above cover code above script_api_init, so with Steam's front-to-back decryption it is in place.
+    g_lua_natives = scan_lua_natives(b);
+    if (g_lua_natives.empty()) {
         return std::format("{} build: no script natives found in script_api_init", b.name);
     }
+    g_build = &b;
     return {};
 }
 
@@ -260,17 +276,8 @@ uint8_t* base() {
     return g_base;
 }
 
-std::vector<Native> find_natives() {
-    std::vector<Native> natives;
-    for (uintptr_t at = build().script_api_init; at + kRegistration.size() <= build().script_api_init_end; ++at) {
-        if (!matches(at, kRegistration) || at + 38 + read<int32_t>(at + 34) != build().lua_setglobal) {
-            continue;
-        }
-        uintptr_t function = at + 7 + read<int32_t>(at + 3);
-        uintptr_t name = at + 29 + read<int32_t>(at + 25);
-        natives.push_back({reinterpret_cast<const char*>(g_base + name), function, at});
-    }
-    return natives;
+const std::vector<LuaNative>& lua_natives() {
+    return g_lua_natives;
 }
 
 }  // namespace oyr::game

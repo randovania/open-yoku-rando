@@ -432,8 +432,8 @@ std::string install() {
         return error;
     }
     // Every scripted object's state gets the wrapped unlockAchievement from here on.
-    auto natives = game::find_natives();
-    auto unlock = std::ranges::find(natives, std::string("unlockAchievement"), &game::Native::name);
+    const auto& natives = game::lua_natives();
+    auto unlock = std::ranges::find(natives, std::string("unlockAchievement"), &game::LuaNative::name);
     if (unlock == natives.end()) {
         return "the game registers no unlockAchievement native";
     }

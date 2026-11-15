@@ -54,7 +54,7 @@ struct Build {
     // rule of randomizer_scripts.csv; queues the action when the target's level is not loaded.
     uintptr_t item_rule_action;
 
-    // Creates a scripted object's own lua_State and registers the natives; find_natives reads them from here.
+    // Creates a scripted object's own lua_State and registers the natives; verify() reads them from here.
     uintptr_t script_api_init;
     uintptr_t script_api_init_end;
     // bool(ScriptContext*, const char* source): lua_load + pcall

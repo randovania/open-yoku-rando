@@ -230,13 +230,14 @@ void add_fruit(int32_t amount);
 bool dialog_open();
 void show_dialog(const std::string& title, const std::string& text);
 
-struct Native {
-    std::string name;
-    uintptr_t rva;
+// A C++ function of the exe that the game registers as a Lua global for its scripts, e.g. getItemCount.
+struct LuaNative {
+    std::string name;        // the Lua global's name
+    uintptr_t rva;           // the C++ function
     uintptr_t registration;  // its `lea rdx, [fn]` in script_api_init
 };
-// The script natives, read from script_api_init's registration code.
-std::vector<Native> find_natives();
+// Every LuaNative, read once by verify() from script_api_init's registration code.
+const std::vector<LuaNative>& lua_natives();
 
 void* lua_newstate();
 void luaL_openlibs(void* state);
