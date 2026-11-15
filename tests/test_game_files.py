@@ -26,6 +26,13 @@ def shipped_bytes() -> bytes:
     return shipped_model().read_bytes()
 
 
+def all_categories() -> dict[str, dict[str, str]]:
+    """A category for every location a category line is about."""
+    return {
+        line.location: {"determiner": "an ", "noun": "upgrade"} for line in game_files.load_category_lines()
+    }
+
+
 def add_game_model(game_path, relative: str) -> bytes:
     """A model file of the game, game-relative without the suffix; returns its content."""
     path = game_path.joinpath(f"{relative}_x102.sim")
@@ -61,7 +68,7 @@ def test_the_shipped_texture_is_a_sim_the_game_can_read():
 
 
 def test_install_puts_everything_into_the_mod_folder(fake_game_path):
-    install = game_files.install_files(fake_game_path, default_models(), {})
+    install = game_files.install_files(fake_game_path, default_models(), {}, all_categories())
 
     assert sorted(install.written) == sorted([DLL, PROXY, TARGET, SCRIPTS, TEXTS])
     assert install.removed == ()
@@ -76,7 +83,7 @@ def test_install_puts_everything_into_the_mod_folder(fake_game_path):
 def test_install_changes_no_file_of_the_game(fake_game_path):
     before = game_files_snapshot(fake_game_path)
 
-    game_files.install_files(fake_game_path, default_models(), {42: "A caption"})
+    game_files.install_files(fake_game_path, default_models(), {42: "A caption"}, all_categories())
 
     assert game_files_snapshot(fake_game_path) == before
     assert not fake_game_path.joinpath("processed", "items").exists()
@@ -115,7 +122,7 @@ def test_install_copies_a_game_model_under_its_id(fake_game_path):
         "nothing_abilities_dive": game_files.model_data(fake_game_path, "abilities/dive"),
     }
 
-    install = game_files.install_files(fake_game_path, models, {})
+    install = game_files.install_files(fake_game_path, models, {}, all_categories())
 
     target = f"{game_files.ITEMS_FOLDER}/nothing_abilities_dive_x102.sim"
     assert target in install.written
@@ -124,7 +131,7 @@ def test_install_copies_a_game_model_under_its_id(fake_game_path):
 
 
 def test_install_writes_the_texts(fake_game_path):
-    game_files.install_files(fake_game_path, default_models(), {42: "Line one\nLine two; and more"})
+    game_files.install_files(fake_game_path, default_models(), {42: "Line one\nLine two; and more"}, all_categories())
 
     text = fake_game_path.joinpath(TEXTS).read_bytes().decode("utf-8")
     assert text.endswith("\r\n")
@@ -134,12 +141,36 @@ def test_install_writes_the_texts(fake_game_path):
     assert "items/nothing_42_1;Line one\\nLine two, and more" in lines
 
 
+def test_install_writes_the_category_lines(fake_game_path):
+    categories = all_categories()
+    categories["jungle_canyon_caper:2679"] = {"determiner": "a ", "noun": "key"}
+    categories["cave_temple_terror_lower:4744"] = {"determiner": "some ", "noun": "fruit"}
+
+    game_files.install_files(fake_game_path, default_models(), {}, categories)
+
+    lines = fake_game_path.joinpath(TEXTS).read_bytes().decode("utf-8").split("\r\n")
+    assert "kickback_2b;Here, take a key as thanks for letting me out!" in lines
+    assert "willo_temple_1b;According to my scrying, some fruit is nearby!" in lines
+    assert "willo_temple_2;Trouble finding the fruit? It should be somewhere below! Look for its magical gleam!" in (
+        lines
+    )
+
+
+def test_every_category_line_fills_from_the_seeds_categories(shuffled_configuration):
+    categories = {pickup["location"]: pickup["category"] for pickup in shuffled_configuration["pickups"]}
+
+    filled = dict(game_files.category_strings(categories))
+
+    assert len(filled) == len(game_files.load_category_lines())
+    assert not any("{" in line for line in filled.values())
+
+
 def test_install_removes_models_it_no_longer_uses(fake_game_path):
     old = fake_game_path.joinpath(game_files.ITEMS_FOLDER, "nothing_missiles_x102.sim")
     old.parent.mkdir(parents=True)
     old.write_bytes(b"an earlier seed's model")
 
-    install = game_files.install_files(fake_game_path, default_models(), {})
+    install = game_files.install_files(fake_game_path, default_models(), {}, all_categories())
 
     assert not old.exists()
     assert install.removed == (f"{game_files.ITEMS_FOLDER}/nothing_missiles_x102.sim",)
@@ -147,10 +178,10 @@ def test_install_removes_models_it_no_longer_uses(fake_game_path):
 
 
 def test_installing_twice_gives_the_same_texts(fake_game_path):
-    game_files.install_files(fake_game_path, default_models(), {42: "A caption"})
+    game_files.install_files(fake_game_path, default_models(), {42: "A caption"}, all_categories())
     once = fake_game_path.joinpath(TEXTS).read_bytes()
 
-    game_files.install_files(fake_game_path, default_models(), {42: "A caption"})
+    game_files.install_files(fake_game_path, default_models(), {42: "A caption"}, all_categories())
 
     assert fake_game_path.joinpath(TEXTS).read_bytes() == once
 
@@ -159,7 +190,7 @@ def test_install_explains_missing_dlls(fake_game_path, mocker, tmp_path):
     mocker.patch("open_yoku_rando.game_files.files_path", return_value=tmp_path)
 
     with pytest.raises(ValueError, match=r"native/build\.cmd"):
-        game_files.install_files(fake_game_path, {}, {})
+        game_files.install_files(fake_game_path, {}, {}, all_categories())
 
 
 def test_nothing_strings_default_model_only():
@@ -289,7 +320,7 @@ def test_install_with_beacons_serves_the_gated_ceremony(fake_game_path):
     add_beacon_sources(fake_game_path)
     before = game_files_snapshot(fake_game_path)
 
-    install = game_files.install_files(fake_game_path, default_models(), {}, required_beacons=3)
+    install = game_files.install_files(fake_game_path, default_models(), {}, all_categories(), required_beacons=3)
 
     assert {game_files.SCRIPTS_PATH, game_files.ANIMS_PATH} <= set(install.written)
     scripts = fake_game_path.joinpath(game_files.SCRIPTS_PATH).read_bytes()
@@ -303,9 +334,9 @@ def test_install_with_beacons_serves_the_gated_ceremony(fake_game_path):
 
 def test_install_without_beacons_removes_the_beacon_files(fake_game_path):
     add_beacon_sources(fake_game_path)
-    game_files.install_files(fake_game_path, default_models(), {}, required_beacons=3)
+    game_files.install_files(fake_game_path, default_models(), {}, all_categories(), required_beacons=3)
 
-    install = game_files.install_files(fake_game_path, default_models(), {})
+    install = game_files.install_files(fake_game_path, default_models(), {}, all_categories())
 
     assert install.removed == (game_files.ANIMS_PATH,)
     assert b"hasCompletedQuest" not in fake_game_path.joinpath(game_files.SCRIPTS_PATH).read_bytes()

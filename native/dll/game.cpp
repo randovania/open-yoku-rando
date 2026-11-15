@@ -252,18 +252,27 @@ void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>
     if (strings.data() == checked_data && strings.size() == checked_size) {
         return;
     }
-    std::map<std::string, size_t> index;
-    for (size_t i = 0; i < strings.size(); ++i) {
-        index.emplace(strings[i][0], i);
+    // Key -> the positions of its lines in the table.
+    std::map<std::string, std::vector<size_t>> positions_by_key;
+    for (size_t position = 0; position < strings.size(); ++position) {
+        positions_by_key[strings[position][0]].push_back(position);
     }
     size_t changed = 0;
     for (const auto& [key, value] : entries) {
-        if (auto existing = index.find(key); existing == index.end()) {
+        auto found = positions_by_key.find(key);
+        // not found => append it as new entry
+        if (found == positions_by_key.end()) {
             strings.push_back({key, value});
             ++changed;
-        } else if (strings[existing->second][1] != value) {
-            strings[existing->second][1] = value;
-            ++changed;
+            continue;
+        }
+        // found => replace all occurences of the key with the new text
+        for (size_t position : found->second) {
+            std::string& text = strings[position][1];
+            if (text != value) {
+                text = value;
+                ++changed;
+            }
         }
     }
     if (changed > 0) {
