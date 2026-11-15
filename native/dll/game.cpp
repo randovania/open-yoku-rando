@@ -91,6 +91,11 @@ std::string current_level() {
     return data ? field<std::string>(data, globals_offset::level) : std::string();
 }
 
+std::string text_language() {
+    uint8_t* data = globals();
+    return data ? field<std::string>(data, globals_offset::ui_texts) : std::string();
+}
+
 bool in_game() {
     std::string level = current_level();
     return !level.empty() && level != "_start_screen";
@@ -266,37 +271,6 @@ void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>
     }
     checked_data = strings.data();
     checked_size = strings.size();
-}
-
-void fix_dialog_strings(const std::vector<DialogFix>& fixes) {
-    struct Checked {
-        uintptr_t file_offset;
-        const void* data = nullptr;
-        size_t size = 0;
-    };
-    // The game looks a dialog line up in the language's own table first and only falls back to English, so both
-    // get the fixes.
-    static std::array<Checked, 2> tables{{{globals_offset::dialog_file}, {globals_offset::dialog_translation_file}}};
-    if (fixes.empty()) {
-        return;
-    }
-    for (Checked& checked : tables) {
-        StringTable* table = strings_of(checked.file_offset);
-        if (!table || (table->data() == checked.data && table->size() == checked.size)) {
-            continue;
-        }
-        for (auto& [key, value] : *table) {
-            for (const DialogFix& fix : fixes) {
-                if (key == fix.key && value == fix.original) {
-                    value = fix.fix;
-                    log::info("fixed the dialog line {}", key);
-                    break;
-                }
-            }
-        }
-        checked.data = table->data();
-        checked.size = table->size();
-    }
 }
 
 bool ensure_ui_string(const std::string& key, const std::string& value) {

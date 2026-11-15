@@ -20,7 +20,7 @@ inline constexpr uintptr_t level = 0x25b8;      // std::string, save_manager+0x2
 inline constexpr uintptr_t spawner = 0x25d8;    // int32, save_manager+0x48: object id the ball starts at in `level`
 inline constexpr uintptr_t level_loading = 0x3630;  // non-null while a level load is pending
 inline constexpr uintptr_t save_flags = 0x1f06c;    // bit 0: the game saves nothing
-inline constexpr uintptr_t ui_texts = 0x8fd0;       // what ui_text looks keys up in
+inline constexpr uintptr_t ui_texts = 0x8fd0;       // what ui_text looks keys up in; starts with the loaded language
 inline constexpr uintptr_t inventory = 0x29e8;  // std::vector<InventoryItem>
 // std::vector<std::string>; the game keeps entries it does not know, which is how the patcher marks a save.
 inline constexpr uintptr_t quests_completed = 0x2688;
@@ -33,9 +33,7 @@ inline constexpr uintptr_t randomizer_state = 0x3550;    // what the randomizer 
 inline constexpr uintptr_t dialog_flag = 0x4dd0;
 inline constexpr uintptr_t string_table = 0x4de0;
 inline constexpr uintptr_t ui_file = 0x9018;
-inline constexpr uintptr_t dialog_file = 0x9028;
-// The chosen language's dialog file; searched before dialog_file.
-inline constexpr uintptr_t dialog_translation_file = 0x9058;
+inline constexpr uintptr_t dialog_file = 0x9028;  // English; the DLL keeps the game in English, see hooks.cpp
 inline constexpr uintptr_t file_strings = 0x78;  // std::vector<std::array<std::string, 2>> in a text file object
 inline constexpr uintptr_t world = 0x1f80;        // World*, the running game
 inline constexpr uintptr_t loot_tables = 0x89f8;  // std::vector<LootTable>, loottables.json
@@ -124,6 +122,8 @@ uint8_t* globals();  // null until the game has set up its globals
 
 // Empty before the game has globals.
 std::string current_level();
+// The language the game's texts are loaded in ("en", "de", ...); empty before the game has globals.
+std::string text_language();
 // False in the main menu, where items must not be given.
 bool in_game();
 // Counts simulated frames: stands still while paused, loading or in a menu, unlike the tick.
@@ -171,16 +171,9 @@ void set_string(const std::string& key, const std::string& value);
 void erase_string(const std::string& key);
 // The dialog string for key, or empty; `found` tells the two apart.
 std::string get_string(const std::string& key, bool* found = nullptr);
-// Adds `entries` to the dialog table. Cheap per tick: only rechecks when the table was replaced or resized.
+// Sets `entries` in the dialog table, adding missing keys and overwriting the game's own. Cheap per tick: only rechecks
+// when the table was replaced or resized.
 void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>>& entries);
-// A dialog line to replace while it still reads `original`, the way one of the game's languages ships it.
-struct DialogFix {
-    std::string key;
-    std::string original;
-    std::string fix;
-};
-// Applies `fixes` to the dialog table. Cheap per tick, like ensure_dialog_strings.
-void fix_dialog_strings(const std::vector<DialogFix>& fixes);
 // Adds a "ui_" key unless present. False while the UI text is not loaded yet.
 bool ensure_ui_string(const std::string& key, const std::string& value);
 // Adds to `fruit` and `total_fruit`, like addFruit with a positive amount.

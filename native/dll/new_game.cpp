@@ -178,24 +178,6 @@ void load_texts() {
     log::info("{} texts in {}", g_texts.size(), path.string());
 }
 
-std::vector<game::DialogFix> g_text_fixes;
-
-void load_text_fixes() {
-    fs::path path = seed_path().parent_path() / L"text_fixes.txt";
-    std::ifstream file(path, std::ios::binary);
-    std::string line;
-    while (std::getline(file, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        std::vector<std::string_view> f = split_tabs(line);
-        if (f.size() == 3 && !f[0].empty()) {
-            g_text_fixes.push_back({std::string(f[0]), std::string(f[1]), std::string(f[2])});
-        }
-    }
-    log::info("{} text fixes in {}", g_text_fixes.size(), path.string());
-}
-
 std::string shown_hash(const Seed& seed) {
     return seed.hash.empty() ? seed.identifier : seed.hash;
 }
@@ -235,10 +217,6 @@ const std::vector<std::pair<std::string, std::string>>& texts() {
     return g_texts;
 }
 
-const std::vector<game::DialogFix>& text_fixes() {
-    return g_text_fixes;
-}
-
 const std::optional<SeedInfo>& seed_info() {
     return g_seed_info;
 }
@@ -246,7 +224,6 @@ const std::optional<SeedInfo>& seed_info() {
 MenuEntry prepare_menu() {
     load_history();
     load_texts();
-    load_text_fixes();
     fs::path path = seed_path();
     Seed seed;
     MenuEntry entry;

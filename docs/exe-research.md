@@ -147,6 +147,7 @@ the `unlockAchievement` registration in `script_api_init` at a wrapper that adds
 | pause menu builder / command handler | 0x2a49d0 / 0x2ac6b0 | the handler is shared with the main menu |
 | `checkpoint_save` / `save_globals` / `save_apply` | 0x26b740 / 0x26baf0 / 0x269be0 | see "Warp to Start and Warp to Village" |
 | `ui_text` | 0x27cbb0 | `(globals+0x8fd0, const char** out, 0, key)`, the translation first, then the English UI text |
+| `texts_set_language` | 0x27c020 | `(globals+0x8fd0, const char* language)`, the language's std::string at +0; loads the ui, dialog and quest texts; called from six sites, among them the options menu's language setter 0x236b60, which also stores the config value at globals+0x9320. The DLL hooks its first instruction and always passes `"en"`, which loads the English files and clears the translation tables |
 
 Globals offsets: level name 0x25b8, frame counter 0x2028, inventory 0x29e8, fruit 0x2a30 / total 0x2a34, wallet size
 0x2a10, ability flags 0x2a00, quests completed 0x2688, seed 0x35d0, difficulty 0x35d4, randomizer entries 0x35d8,
