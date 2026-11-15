@@ -22,6 +22,11 @@ def scripts_csv_path(game_path: Path) -> Path:
     return game_path.joinpath("data", "text", "randomizer_scripts.csv")
 
 
+def level_json_path(game_path: Path, level: str) -> Path:
+    """A level's objects, with their event wiring and scripts."""
+    return game_path.joinpath("processed", "levels", level, "level.json")
+
+
 def dialog_anims_path(game_path: Path) -> Path:
     """The animation each dialog line is spoken with."""
     return game_path.joinpath("processed", "text", "dialog_anim.strings")
@@ -41,7 +46,7 @@ def read_randomizer_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def compare_locations(rows: list[dict[str, str]]) -> list[str]:
     """The differences between the bundled locations and the rows of the PATCHER_DIFFICULTY CSV."""
-    locations = load_locations()
+    locations = [location for location in load_locations() if not location.added]
     problems = []
     if len(rows) != len(locations):
         problems.append(f"expected {len(locations)} locations, the game has {len(rows)}")

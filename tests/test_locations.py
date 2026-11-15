@@ -11,6 +11,11 @@ DIFFICULTIES = ("normal", "hard", "veryhard")
 tests are what keeps the other two from drifting away from it unnoticed."""
 
 
+def _game_locations():
+    """The locations the game's CSVs have a row for, in their order."""
+    return [location for location in load_locations() if not location.added]
+
+
 def _item_enum() -> set[str]:
     schema = json.loads(files_path().joinpath("schema.json").read_text(encoding="utf-8"))
     return set(schema["$defs"]["item_id"]["enum"])
@@ -19,9 +24,12 @@ def _item_enum() -> set[str]:
 def test_locations_are_consistent():
     locations = load_locations()
 
-    assert len(locations) == 248
-    assert len({location.spawn_id for location in locations}) == 248
-    assert len({location.id for location in locations}) == 248
+    assert len(locations) == 249
+    assert len({location.spawn_id for location in locations}) == 249
+    assert len({location.id for location in locations}) == 249
+    assert len(_game_locations()) == 248
+    # The DLL appends the added ones after the CSV's rows.
+    assert all(location.added for location in locations[248:])
 
     level_numbers: dict[str, int] = {}
     for location in locations:
@@ -33,7 +41,8 @@ def test_locations_are_consistent():
 
 
 def test_vanilla_items_are_in_schema():
-    items = {location.vanilla_item for location in load_locations()}
+    # An added location's vanilla_item is the key its script's addItem uses, not an item of the game.
+    items = {location.vanilla_item for location in _game_locations()}
 
     assert items <= _item_enum()
 
@@ -43,15 +52,15 @@ def test_locations_match_game(yoku_game_path):
 
     assert game_install.compare_locations(rows) == []
     assert game_install.check(yoku_game_path) == []
-    assert [row["Name"] for row in rows] == [location.name for location in load_locations()]
-    assert [row["Spawn"] == "1" for row in rows] == [location.spawn for location in load_locations()]
+    assert [row["Name"] for row in rows] == [location.name for location in _game_locations()]
+    assert [row["Spawn"] == "1" for row in rows] == [location.spawn for location in _game_locations()]
 
 
 @pytest.mark.parametrize("difficulty", DIFFICULTIES)
 def test_difficulties_share_locations(yoku_game_path, difficulty):
     _, rows = game_install.read_randomizer_csv(game_install.randomizer_csv_path(yoku_game_path, difficulty))
 
-    assert [row["Spawn ID"] for row in rows] == [location.spawn_id for location in load_locations()]
+    assert [row["Spawn ID"] for row in rows] == [location.spawn_id for location in _game_locations()]
 
 
 def test_item_enum_matches_game(yoku_game_path):

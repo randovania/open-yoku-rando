@@ -4,8 +4,11 @@ import pytest
 
 from open_yoku_rando import game_files
 
+from .conftest import CEREMONY, GAME_SCRIPTS, TUNGUSKA_SCRIPT
+
 TARGET = f"{game_files.ITEMS_FOLDER}/{game_files.NOTHING_ITEM_ID}_x102.sim"
 TEXTS = game_files.TEXTS_PATH
+SCRIPTS = game_files.SCRIPTS_PATH
 DLL = f"{game_files.MOD_FOLDER}/open_yoku_rando.dll"
 PROXY = "xinput9_1_0.dll"
 GAME_STRINGS = "processed/text/dialog_en.strings"
@@ -60,11 +63,14 @@ def test_the_shipped_texture_is_a_sim_the_game_can_read():
 def test_install_puts_everything_into_the_mod_folder(fake_game_path):
     install = game_files.install_files(fake_game_path, default_models(), {})
 
-    assert sorted(install.written) == sorted([DLL, PROXY, TARGET, TEXTS])
+    assert sorted(install.written) == sorted([DLL, PROXY, TARGET, SCRIPTS, TEXTS])
     assert install.removed == ()
     assert fake_game_path.joinpath(TARGET).read_bytes() == shipped_bytes()
     assert fake_game_path.joinpath(DLL).is_file()
     assert fake_game_path.joinpath(PROXY).is_file()
+    assert fake_game_path.joinpath(SCRIPTS).read_bytes() == (
+        GAME_SCRIPTS + f"replace_script\t{TUNGUSKA}\t{TUNGUSKA_PATCHED}\r\n".encode()
+    )
 
 
 def test_install_changes_no_file_of_the_game(fake_game_path):
@@ -180,20 +186,70 @@ def test_nothing_strings_keeps_the_captions_on_the_base_id():
     assert "items/nothing_missiles_42_1" not in keys
 
 
-CEREMONY = b'function self.instruments_2() triggerOutput("visit_nim") dialogBegin("nim") dialogLine(94) dialogEnd() end'
 GAME_ANIMS = b"nim_94;talk_1,hold_convo_idle\r\nnim_95;talk_1,hold_convo_idle\0"
+TUNGUSKA = "peak_filthy_flat:1030"
+TUNGUSKA_PATCHED = (
+    'function self.talk3() dialogBegin("tunguska") dialogLine(3) triggerOutput("talk3done")'
+    ' addItem("tunguska_reward") end'
+)
 
 
 def add_beacon_sources(game_path) -> None:
-    """The two game files the beacon goal starts from."""
-    game_path.joinpath("data", "text", "randomizer_scripts.csv").write_bytes(b"scripts\t" + CEREMONY + b"\r\n")
+    """The game file the beacon goal needs besides randomizer_scripts.csv."""
     game_path.joinpath("processed", "text", "dialog_anim.strings").write_bytes(GAME_ANIMS)
 
 
-def test_gate_ceremony_refuses_until_the_required_beacon_is_lit():
-    gated = game_files.gate_ceremony(CEREMONY, 5)
+def test_one_line_script_drops_comments_and_joins_lines():
+    assert game_files.one_line_script(TUNGUSKA_SCRIPT) == (
+        'function self.talk3() dialogBegin("tunguska") dialogLine(3) triggerOutput("talk3done") end'
+    )
 
-    assert gated == CEREMONY.replace(
+
+def test_object_script_reads_the_level(fake_game_path):
+    assert game_files.object_script(fake_game_path, TUNGUSKA) == TUNGUSKA_SCRIPT
+
+
+def test_object_script_needs_the_object(fake_game_path):
+    with pytest.raises(ValueError, match="has no object 1 with a script"):
+        game_files.object_script(fake_game_path, "peak_filthy_flat:1")
+
+
+def test_patched_object_scripts_gives_tunguska_the_reward(fake_game_path):
+    assert game_files.patched_object_scripts(fake_game_path) == {TUNGUSKA: TUNGUSKA_PATCHED}
+
+
+def test_patched_object_scripts_needs_the_anchor_once(fake_game_path, mocker):
+    mocker.patch.dict(game_files.SCRIPT_PATCHES, {TUNGUSKA: ("no such anchor", " addItem(\"x\")")}, clear=True)
+
+    with pytest.raises(ValueError, match="does not have no such anchor"):
+        game_files.patched_object_scripts(fake_game_path)
+
+
+def test_patch_scripts_adds_a_line_per_override_before_the_end():
+    patched = game_files.patch_scripts(GAME_SCRIPTS + b"\0", {TUNGUSKA: TUNGUSKA_PATCHED})
+
+    assert patched == GAME_SCRIPTS + f"replace_script\t{TUNGUSKA}\t{TUNGUSKA_PATCHED}\r\n".encode() + b"\0"
+
+
+def test_patch_scripts_ends_the_last_line_first():
+    patched = game_files.patch_scripts(GAME_SCRIPTS.rstrip(), {TUNGUSKA: "script"})
+
+    assert patched == GAME_SCRIPTS + f"replace_script\t{TUNGUSKA}\tscript\r\n".encode()
+
+
+def test_patch_scripts_refuses_an_override_the_game_has():
+    with pytest.raises(ValueError, match="already replaces the script of hub_festival:1"):
+        game_files.patch_scripts(GAME_SCRIPTS, {"hub_festival:1": "script"})
+
+
+def test_patch_scripts_without_beacons_leaves_the_ceremony():
+    assert game_files.patch_scripts(GAME_SCRIPTS, {}) == GAME_SCRIPTS
+
+
+def test_patch_scripts_refuses_the_ceremony_until_the_required_beacon_is_lit():
+    gated = game_files.patch_scripts(GAME_SCRIPTS, {}, 5)
+
+    assert gated == GAME_SCRIPTS.replace(
         b'dialogBegin("nim")',
         b'dialogBegin("nim") if hasCompletedQuest("@open-yoku-rando:beacon:5") == 0 then'
         b" dialogLine(900) dialogEnd() return end",
@@ -201,9 +257,9 @@ def test_gate_ceremony_refuses_until_the_required_beacon_is_lit():
 
 
 @pytest.mark.parametrize("scripts", [b"no ceremony here", CEREMONY + CEREMONY])
-def test_gate_ceremony_needs_exactly_one_ceremony(scripts):
+def test_patch_scripts_with_beacons_needs_exactly_one_ceremony(scripts):
     with pytest.raises(ValueError, match="Nim's ceremony"):
-        game_files.gate_ceremony(scripts, 1)
+        game_files.patch_scripts(scripts, {}, 1)
 
 
 @pytest.mark.parametrize(("required", "expected"), [(1, "1 beacon"), (5, "5 beacons")])
@@ -251,7 +307,7 @@ def test_install_without_beacons_removes_the_beacon_files(fake_game_path):
 
     install = game_files.install_files(fake_game_path, default_models(), {})
 
-    assert install.removed == (game_files.SCRIPTS_PATH, game_files.ANIMS_PATH)
-    assert not fake_game_path.joinpath(game_files.SCRIPTS_PATH).exists()
+    assert install.removed == (game_files.ANIMS_PATH,)
+    assert b"hasCompletedQuest" not in fake_game_path.joinpath(game_files.SCRIPTS_PATH).read_bytes()
     assert not fake_game_path.joinpath(game_files.ANIMS_PATH).exists()
     assert "nim_900" not in fake_game_path.joinpath(TEXTS).read_text(encoding="utf-8")

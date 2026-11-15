@@ -12,7 +12,7 @@ def make_id(level_number: int, object_id: int) -> int:
 
 @dataclasses.dataclass(frozen=True)
 class Location:
-    """One row of the game's randomizer CSV; `id` and the row order are what the save needs."""
+    """One randomizer location; `id` and the order are what the save needs."""
 
     spawn_id: str
     """`level:object`, as in the CSV's Spawn ID column."""
@@ -27,10 +27,12 @@ class Location:
     vanilla_item: str
     tracker: str | None
     """The map marker as `x,y`, or None where the CSV cell is empty."""
+    added: bool = False
+    """Not in the game's CSV; the DLL keeps its entry (native/dll/added_locations.hpp)."""
 
 
 @functools.cache
 def load_locations() -> tuple[Location, ...]:
-    """The 248 locations, in the CSV row order the save's randomizer list must follow."""
+    """The locations in the order the save's randomizer list must follow."""
     with files_path().joinpath("locations.json").open(encoding="utf-8") as f:
         return tuple(Location(**entry) for entry in json.load(f))

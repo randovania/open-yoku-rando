@@ -7,7 +7,7 @@ Randovania generates the seed; this project puts it into the game:
 - **the DLL** (C++, `native/`) loads with the game, adds "Start Randovania Seed" to the menu, applies the seed, shows
   each location's text at pickup and talks to Randovania for multiworld.
 
-Supports all 248 locations, starting items and fruit, Nothing pickups (empty spots and other players' items),
+Supports all 248 locations of the game's own randomizer plus Tunguska's reward for the six Sootlings, starting items and fruit, Nothing pickups (empty spots and other players' items),
 per-location texts, a number of lit beacons required before the final boss, multiworld, and the Epic, GOG and Steam
 builds of the game. No file of the game is changed.
 

@@ -1,5 +1,6 @@
 #include "hooks.hpp"
 
+#include "added_locations.hpp"
 #include "game.hpp"
 #include "goal.hpp"
 #include "log.hpp"
@@ -116,8 +117,10 @@ uint64_t hook_load_level_native(void* loader, void* level, void* c, void* d) {
 }
 
 uint64_t hook_randomizer_loader(void* state, void* level, void* dump, void* d) {
+    added_locations::before_loader(state);
     bool new_game = new_game::before_loader(state);
     uint64_t result = g_randomizer_loader(state, level, dump, d);
+    added_locations::after_loader(state);
     new_game::after_loader(state, new_game);
     return result;
 }

@@ -1249,6 +1249,11 @@
             "location": "jungle_slug_struggle:3411",
             "item": "traitor_spirit",
             "caption": "Traitor Spirit 4: traitor_spirit"
+        },
+        {
+            "location": "peak_filthy_flat:2632",
+            "item": "reward_fruit_big",
+            "caption": "NPC: Tunguska: reward_fruit_big"
         }
     ],
     "starting_items": {
