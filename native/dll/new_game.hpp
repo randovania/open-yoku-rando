@@ -43,7 +43,7 @@ const std::string* hash_for_seed(uint32_t seed);
 const char* first_level(const char* level);
 
 // Around the randomizer loader. before_loader returns whether a new Randovania game is being set up.
-bool before_loader(void* randomizer_state);
-void after_loader(void* randomizer_state, bool new_game);
+bool before_loader(game::RandomizerState* state);
+void after_loader(game::RandomizerState* state, bool new_game);
 
 }  // namespace oyr::new_game

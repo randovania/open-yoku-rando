@@ -11,7 +11,6 @@
 namespace oyr::warp {
 namespace {
 
-constexpr int32_t kGameModeRandomizer = 3;
 constexpr const char* kCommandWStart = "oyr_warp_to_start";
 constexpr const char* kTextKeyStart = "ui_oyr_warp_to_start";
 constexpr const char* kTextStart = "Warp to Start";
@@ -52,10 +51,7 @@ using SaveManagerFn = void (*)(void* save_manager);
 using SaveApplyFn = bool (*)(void* save_manager, bool unknown);
 using ObjectFn = void (*)(void* object);
 
-template <class Fn>
-Fn game_fn(uintptr_t game::Build::* rva) {
-    return reinterpret_cast<Fn>(game::base() + game::build().*rva);
-}
+using game::game_fn;
 
 template <class Fn>
 Fn method(void* object, size_t slot) {
@@ -153,8 +149,7 @@ std::string marker(const Location& location) {
 
 void add_menu_entry(void* menu) {
     uint8_t* globals = game::globals();
-    if (!menu || !globals || !markers::in_randovania_save() ||
-        game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer) {
+    if (!menu || !game::is_randomizer_game() || !markers::in_randovania_save()) {
         return;
     }
 
@@ -186,8 +181,7 @@ void add_menu_entry(void* menu) {
 
 void on_tick() {
     uint8_t* globals = game::globals();
-    if (!globals || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer ||
-        game::field<int32_t>(globals, game::globals_offset::spawner) != kVillage.spawner ||
+    if (!game::is_randomizer_game() || game::field<int32_t>(globals, game::globals_offset::spawner) != kVillage.spawner ||
         game::field<std::string>(globals, game::globals_offset::level) != kVillage.level) {
         return;
     }

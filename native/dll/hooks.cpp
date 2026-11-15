@@ -91,9 +91,9 @@ uint64_t hook_pickup_dialog_init(void* table, void* b, void* c, void* name) {
 
 // A beacon is lit when its use took the Wickerlings: the game only takes them when it lights it.
 uint64_t hook_beacon_use(void* beacon, void* b, void* c, void* d) {
-    int32_t before = game::item_count("collectible");
+    int32_t before = game::item_count(game::wickerling_inventory_id);
     uint64_t result = g_beacon_use(beacon, b, c, d);
-    goal::on_beacon_used(game::item_count("collectible") < before);
+    goal::on_beacon_used(game::item_count(game::wickerling_inventory_id) < before);
     return result;
 }
 
@@ -116,7 +116,8 @@ uint64_t hook_load_level_native(void* loader, void* level, void* c, void* d) {
     return g_level_load(loader, const_cast<char*>(first), c, d);
 }
 
-uint64_t hook_randomizer_loader(void* state, void* level, void* dump, void* d) {
+uint64_t hook_randomizer_loader(void* raw_state, void* level, void* dump, void* d) {
+    auto* state = static_cast<game::RandomizerState*>(raw_state);
     added_locations::before_loader(state);
     bool new_game = new_game::before_loader(state);
     uint64_t result = g_randomizer_loader(state, level, dump, d);

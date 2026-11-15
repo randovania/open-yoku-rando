@@ -31,9 +31,10 @@ std::set<uint32_t> g_dialog_locations;  // already handled by the hook
 std::vector<bool> g_seen_collected;
 std::deque<std::pair<std::string, std::string>> g_location_dialogs;  // still to show
 
-// The game keeps a Wickerling as "collectible", and that is where its texts live.
-std::string text_id(const std::string& item) {
-    return item == "wickerling" ? "collectible" : item;
+// The other id the game keeps the item's texts under (a Wickerling's are under its inventory id), or empty.
+std::string text_alias(const std::string& item) {
+    std::string id = inventory_id(item);
+    return id != item ? id : std::string();
 }
 
 std::string location_line_key(uint32_t location) {
@@ -41,7 +42,10 @@ std::string location_line_key(uint32_t location) {
 }
 
 std::string item_title(const std::string& item) {
-    for (const std::string& id : {item, text_id(item)}) {
+    for (const std::string& id : {item, text_alias(item)}) {
+        if (id.empty()) {
+            continue;
+        }
         bool found = false;
         std::string name = get_string(std::format("items/{}_name", id), &found);
         if (found) {
@@ -54,7 +58,7 @@ std::string item_title(const std::string& item) {
 void show_location_text_for_item(const std::string& item, uint32_t location) {
     bool found = false;
     std::string text = location != 0 ? get_string(location_line_key(location), &found) : std::string();
-    for (const std::string& id : {item, item == "wickerling" ? std::string("collectible") : std::string()}) {
+    for (const std::string& id : {item, text_alias(item)}) {
         if (id.empty()) {
             continue;
         }

@@ -10,44 +10,17 @@
 #include <algorithm>
 #include <span>
 #include <string>
-#include <vector>
 
 namespace oyr::game {
 namespace {
 
-// One rule, as the randomizer state keeps it.
-struct ItemRule {
-    int32_t target;  // level number << 16 | object id
-    uint8_t unknown_0[0x4];
-    std::string item;
-    std::string action;
-};
-static_assert(sizeof(ItemRule) == 0x48);
-
-// An action item_rule_action queued for a level that is not loaded.
-struct PendingAction {
-    int32_t target;
-    uint8_t unknown_0[0x4];
-    std::string action;
-};
-static_assert(sizeof(PendingAction) == 0x28);
-
-constexpr uintptr_t kStateItemRules = 0x38;        // std::vector<ItemRule>
-constexpr uintptr_t kStatePendingActions = 0xa0;   // std::vector<PendingAction>, emptied as levels load
-constexpr uintptr_t kGlobalsLevelObject = 0x1f80;  // the level being played
-constexpr uintptr_t kLevelMainMap = 0x6e8;         // level object -> the main map
-
-uint8_t* randomizer_state() {
-    return globals() + globals_offset::randomizer_state;
-}
-
+// Only called once can_run() found the game's globals, so randomizer_state() is not null.
 std::span<const ItemRule> rules() {
-    return field<std::vector<ItemRule>>(randomizer_state(), kStateItemRules);
+    return randomizer_state()->item_rules;
 }
 
 bool queued_in_game(int32_t target) {
-    auto& pending = field<std::vector<PendingAction>>(randomizer_state(), kStatePendingActions);
-    return std::ranges::any_of(pending, [&](const PendingAction& action) { return action.target == target; });
+    return std::ranges::any_of(randomizer_state()->pending_actions, [&](const PendingAction& action) { return action.target == target; });
 }
 
 bool still_queued(const std::string& item) {
@@ -60,8 +33,8 @@ std::string marker(const std::string& item) {
 
 // item_rule_action finds the target's level on the main map, reached through whichever level is being played.
 bool can_run() {
-    uint8_t* level = in_game() ? field<uint8_t*>(globals(), kGlobalsLevelObject) : nullptr;
-    return level && field<void*>(level, kLevelMainMap);
+    uint8_t* world = in_game() ? field<uint8_t*>(globals(), globals_offset::world) : nullptr;
+    return world && field<void*>(world, world_main_map_offset);
 }
 
 void run(const std::string& item) {

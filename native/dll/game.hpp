@@ -28,16 +28,21 @@ inline constexpr uintptr_t randomizer_entries = 0x35d8;  // std::vector<Randomiz
 inline constexpr uintptr_t frame_counter = 0x2028;       // uint32
 inline constexpr uintptr_t fruit = 0x2a30;               // int32, the save's `fruit`
 inline constexpr uintptr_t total_fruit = 0x2a34;         // int32, the save's `total_fruit`
-inline constexpr uintptr_t game_mode = 0x93b0;           // int32; 3 is a randomizer game
-inline constexpr uintptr_t randomizer_state = 0x3550;    // what the randomizer loader gets
+inline constexpr uintptr_t game_mode = 0x93b0;           // int32; kGameModeRandomizer in a randomizer game
+inline constexpr uintptr_t randomizer_state = 0x3550;    // RandomizerState, what the randomizer loader gets
 inline constexpr uintptr_t dialog_flag = 0x4dd0;
 inline constexpr uintptr_t string_table = 0x4de0;
 inline constexpr uintptr_t ui_file = 0x9018;
 inline constexpr uintptr_t dialog_file = 0x9028;  // English; the DLL keeps the game in English, see hooks.cpp
 inline constexpr uintptr_t file_strings = 0x78;  // std::vector<std::array<std::string, 2>> in a text file object
-inline constexpr uintptr_t world = 0x1f80;        // World*, the running game
+inline constexpr uintptr_t world = 0x1f80;        // World*, the level being played
 inline constexpr uintptr_t loot_tables = 0x89f8;  // std::vector<LootTable>, loottables.json
 }  // namespace globals_offset
+
+inline constexpr int32_t kGameModeRandomizer = 3;
+
+// World -> the main map, which item_rule_action finds a target's level on.
+inline constexpr uintptr_t world_main_map_offset = 0x6e8;
 
 // The ball, as the game reaches it from bubble_pickup's caller and from its position checks.
 inline constexpr uintptr_t world_ball_offset = 0x830;  // World -> Object*, the ball
@@ -68,6 +73,12 @@ inline constexpr const char* nothing_item = "nothing";
 // Also true for the "nothing_<model>" ids the patcher mints for a custom bubble model.
 bool is_nothing_item(const std::string& item);
 
+// A Wickerling's item id; the game keeps it in the inventory, and its texts, as wickerling_inventory_id.
+inline constexpr std::string_view wickerling_item = "wickerling";
+inline constexpr const char* wickerling_inventory_id = "collectible";
+// The id the game keeps `item` under in its inventory and texts.
+const char* inventory_id(const std::string& item);
+
 // One element of globals_offset::randomizer_entries, the save's `_global.randomizer`. Based on YokuArchipelagoMod's
 // RandomizerItem; verified in docs/multiworld-state.md.
 struct RandomizerEntry {
@@ -86,6 +97,41 @@ static_assert(offsetof(RandomizerEntry, vanilla_item) == 0x08);
 static_assert(offsetof(RandomizerEntry, item) == 0x28);
 static_assert(offsetof(RandomizerEntry, revealed) == 0x50);
 static_assert(offsetof(RandomizerEntry, collected) == 0x51);
+
+// One `onpickup <item>` rule of randomizer_scripts.csv, see item_rules.cpp.
+struct ItemRule {
+    int32_t target;  // level number << 16 | object id
+    uint8_t unknown_0[0x4];
+    std::string item;
+    std::string action;
+};
+static_assert(sizeof(ItemRule) == 0x48);
+
+// An action item_rule_action queued for a level that is not loaded.
+struct PendingAction {
+    int32_t target;
+    uint8_t unknown_0[0x4];
+    std::string action;
+};
+static_assert(sizeof(PendingAction) == 0x28);
+
+// The object at globals_offset::randomizer_state, as the loader and mark_collected use it. Only the known part; the
+// DLL never creates or copies one.
+struct RandomizerState {
+    uint8_t unknown_0[0x38];
+    std::vector<ItemRule> item_rules;
+    uint8_t unknown_1[0x30];
+    uint32_t seed;
+    int32_t difficulty;
+    std::vector<RandomizerEntry> entries;  // globals_offset::randomizer_entries
+    std::vector<PendingAction> pending_actions;  // emptied as levels load
+};
+static_assert(offsetof(RandomizerState, item_rules) == 0x38);
+static_assert(offsetof(RandomizerState, seed) == 0x80);
+static_assert(offsetof(RandomizerState, difficulty) == 0x84);
+static_assert(offsetof(RandomizerState, entries) == 0x88);
+static_assert(offsetof(RandomizerState, pending_actions) == 0xa0);
+static_assert(globals_offset::randomizer_state + offsetof(RandomizerState, entries) == globals_offset::randomizer_entries);
 
 // One element of globals_offset::inventory, as getItemCount (0x202c10) reads it.
 struct InventoryItem {
@@ -114,6 +160,17 @@ const Build& build();
 
 uint8_t* base();
 uint8_t* globals();  // null until the game has set up its globals
+
+// The game function at a Build address, e.g. game_fn<void (*)(void*)>(&Build::unpause).
+template <class Fn>
+Fn game_fn(uintptr_t Build::* rva) {
+    return reinterpret_cast<Fn>(base() + build().*rva);
+}
+
+// A randomizer game is loaded or being started; false before the game has globals.
+bool is_randomizer_game();
+// Null before the game has globals.
+RandomizerState* randomizer_state();
 
 // Empty before the game has globals.
 std::string current_level();
@@ -155,7 +212,7 @@ enum class LootResult { NotLoot, Given, Later, Failed };
 LootResult give_loot(const std::string& name);
 // The game's runner of one `onpickup` rule (see item_rules.cpp): applies `action` to `target` if that level is
 // loaded, else queues it until the level loads. Reads the main map through the level being played.
-void item_rule_action(void* state, int32_t target, const char* action);
+void item_rule_action(RandomizerState* state, int32_t target, const char* action);
 // Takes one copy of `item` out of the inventory. False if none was held.
 bool inventory_remove(const std::string& item);
 void set_string(const std::string& key, const std::string& value);

@@ -24,14 +24,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr int32_t kGameModeRandomizer = 3;
 constexpr int32_t kDifficultyHard = 2;  // the logic open-yoku-rando's seeds are generated for
 constexpr int kSeedFormat = 1;
-
-// Offsets into the randomizer state at globals+0x3550, as the loader uses them.
-constexpr uintptr_t kStateSeed = 0x80;
-constexpr uintptr_t kStateDifficulty = 0x84;
-constexpr uintptr_t kStateEntries = 0x88;
 
 struct Seed {
     std::string identifier;
@@ -251,8 +245,7 @@ const std::string& menu_text() {
 const char* first_level(const char* level) {
     static std::string start_level;
     uint8_t* globals = game::globals();
-    if (!globals || !level || game::field<int32_t>(globals, game::globals_offset::game_mode) != kGameModeRandomizer ||
-        !game::field<std::vector<game::RandomizerEntry>>(globals, game::globals_offset::randomizer_entries).empty()) {
+    if (!level || !game::is_randomizer_game() || !game::randomizer_entries().empty()) {
         return level;
     }
     Seed seed;
@@ -268,12 +261,12 @@ const char* first_level(const char* level) {
     return start_level.c_str();
 }
 
-bool before_loader(void* randomizer_state) {
+bool before_loader(game::RandomizerState* state) {
     g_seed.reset();
-    if (game::field<int32_t>(game::globals(), game::globals_offset::game_mode) != kGameModeRandomizer) {
+    if (!game::is_randomizer_game()) {
         return false;
     }
-    auto& entries = game::field<std::vector<game::RandomizerEntry>>(randomizer_state, kStateEntries);
+    auto& entries = state->entries;
     if (!entries.empty()) {
         return false;  // a loaded save, or a level after the first: the loader does not roll either
     }
@@ -283,8 +276,8 @@ bool before_loader(void* randomizer_state) {
         log::info("new randomizer game without a Randovania seed, the game rolls its own: {}", error);
         return false;
     }
-    game::field<int32_t>(randomizer_state, kStateDifficulty) = kDifficultyHard;
-    game::field<uint32_t>(randomizer_state, kStateSeed) = seed.seed;
+    state->difficulty = kDifficultyHard;
+    state->seed = seed.seed;
     // The loader only rolls into an empty entry vector. With a placeholder it treats the game like a loaded save:
     // fills every entry from the CSV but keeps the items, which after_loader then sets.
     entries.emplace_back();
@@ -292,14 +285,14 @@ bool before_loader(void* randomizer_state) {
     return true;
 }
 
-void after_loader(void* randomizer_state, bool new_game) {
+void after_loader(game::RandomizerState* state, bool new_game) {
     if (!new_game || !g_seed) {
         return;
     }
     Seed seed = std::move(*g_seed);
     g_seed.reset();
 
-    auto& entries = game::field<std::vector<game::RandomizerEntry>>(randomizer_state, kStateEntries);
+    auto& entries = state->entries;
     size_t placed = 0;
     for (game::RandomizerEntry& entry : entries) {
         auto item = seed.placement.find(static_cast<uint32_t>(entry.id));

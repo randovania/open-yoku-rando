@@ -10,8 +10,6 @@
 namespace oyr::added_locations {
 namespace {
 
-constexpr uintptr_t kStateEntries = 0x88;  // RandomizerState: std::vector<RandomizerEntry>, globals+0x35d8
-
 // The state of an entry that kAddedLocations does not hold: what the seed placed and how far the player got.
 struct Kept {
     uint32_t id;
@@ -23,11 +21,6 @@ struct Kept {
 // Filled by before_loader, used and emptied by after_loader.
 std::vector<Kept> g_kept;
 
-// The game's entry vector, which the save stores as `_global.randomizer`.
-std::vector<game::RandomizerEntry>& entries_of(void* randomizer_state) {
-    return game::field<std::vector<game::RandomizerEntry>>(randomizer_state, kStateEntries);
-}
-
 // The added location with this entry id, or null for the CSV's own.
 const AddedLocation* added(int32_t id) {
     auto found = std::ranges::find(kAddedLocations, static_cast<uint32_t>(id), &AddedLocation::id);
@@ -37,9 +30,9 @@ const AddedLocation* added(int32_t id) {
 }  // namespace
 
 // Copies the state of each added entry in the vector, which the loader is about to cut off.
-void before_loader(void* randomizer_state) {
+void before_loader(game::RandomizerState* state) {
     g_kept.clear();
-    for (const game::RandomizerEntry& entry : entries_of(randomizer_state)) {
+    for (const game::RandomizerEntry& entry : state->entries) {
         if (added(entry.id)) {
             g_kept.push_back({static_cast<uint32_t>(entry.id), entry.item, entry.revealed, entry.collected});
         }
@@ -47,8 +40,8 @@ void before_loader(void* randomizer_state) {
 }
 
 // Appends each added entry the loader removed.
-void after_loader(void* randomizer_state) {
-    auto& entries = entries_of(randomizer_state);
+void after_loader(game::RandomizerState* state) {
+    auto& entries = state->entries;
     // Empty when the loader bailed out.
     if (entries.empty()) {
         return;
@@ -69,7 +62,7 @@ void after_loader(void* randomizer_state) {
             entry.revealed = kept->revealed;
             entry.collected = kept->collected;
         } else {
-            entry.item = "nothing";
+            entry.item = game::nothing_item;
             log::info("location {} is new to this game", location.id);
         }
     }

@@ -24,7 +24,7 @@ using LuaStateFn = void (*)(void* state);
 using LuaSetGlobalFn = void (*)(void* state, const char* name);
 using LuaPushStringFn = void (*)(void* state, const char* text);
 using RunScriptFn = bool (*)(void* context, const char* source);
-using ItemRuleActionFn = void (*)(void* state, int32_t target, const char* action);
+using ItemRuleActionFn = void (*)(RandomizerState* state, int32_t target, const char* action);
 
 // MSVC's std::shared_ptr: the object, then the control block (vtable, uses at +8, weaks at +0xc).
 struct SharedPtr {
@@ -54,12 +54,6 @@ void release(SharedPtr& pointer) {
     pointer = {};
 }
 
-
-template <class Fn, uintptr_t Build::* rva>
-Fn game_fn() {
-    return reinterpret_cast<Fn>(base() + build().*rva);
-}
-
 // The game's std::string and std::vector have the same ABI as ours; both are MSVC x64.
 StringTable* strings_of(uintptr_t file_offset) {
     uint8_t* data = globals();
@@ -76,14 +70,24 @@ std::span<T> vector_at(uintptr_t offset) {
     return field<std::vector<T>>(data, offset);
 }
 
-const char* inventory_id(const std::string& item) {
-    return item == "wickerling" ? "collectible" : item.c_str();
-}
-
 }  // namespace
+
+const char* inventory_id(const std::string& item) {
+    return item == wickerling_item ? wickerling_inventory_id : item.c_str();
+}
 
 uint8_t* globals() {
     return *reinterpret_cast<uint8_t**>(base() + build().globals_ptr);
+}
+
+bool is_randomizer_game() {
+    uint8_t* data = globals();
+    return data && field<int32_t>(data, globals_offset::game_mode) == kGameModeRandomizer;
+}
+
+RandomizerState* randomizer_state() {
+    uint8_t* data = globals();
+    return data ? &field<RandomizerState>(data, globals_offset::randomizer_state) : nullptr;
 }
 
 std::string current_level() {
@@ -139,7 +143,7 @@ std::vector<std::string>* quests_completed() {
 }
 
 void inventory_add(const std::string& item) {
-    game_fn<InventoryAddFn, &Build::inventory_add>()(globals() + globals_offset::inventory, inventory_id(item));
+    game_fn<InventoryAddFn>(&Build::inventory_add)(globals() + globals_offset::inventory, inventory_id(item));
 }
 
 std::optional<Ball> ball() {
@@ -159,7 +163,7 @@ std::optional<Ball> ball() {
 
 LootResult give_loot(const std::string& name) {
     uint8_t* data = globals();
-    void* table = data ? game_fn<LootTableFindFn, &Build::loot_table_find>()(data + globals_offset::loot_tables, name.c_str()) : nullptr;
+    void* table = data ? game_fn<LootTableFindFn>(&Build::loot_table_find)(data + globals_offset::loot_tables, name.c_str()) : nullptr;
     if (!table) {
         return LootResult::NotLoot;
     }
@@ -184,23 +188,23 @@ LootResult give_loot(const std::string& name) {
 
     SharedPtr bubble;
     // The ball is the spawner: the game makes it the bubble's owner.
-    game_fn<LootSpawnFn, &Build::loot_spawn>()(&bubble, at->level, at->object, table, position, nullptr);
+    game_fn<LootSpawnFn>(&Build::loot_spawn)(&bubble, at->level, at->object, table, position, nullptr);
     if (!bubble.object) {
         log::info("loot {} spawned no bubble", name);
         return LootResult::Failed;
     }
     // As the game does for a bubble its owner hands out at once.
-    game_fn<BubblePickupFn, &Build::bubble_pickup>()(bubble.object, at->object);
+    game_fn<BubblePickupFn>(&Build::bubble_pickup)(bubble.object, at->object);
     release(bubble);
     return LootResult::Given;
 }
 
-void item_rule_action(void* state, int32_t target, const char* action) {
-    game_fn<ItemRuleActionFn, &Build::item_rule_action>()(state, target, action);
+void item_rule_action(RandomizerState* state, int32_t target, const char* action) {
+    game_fn<ItemRuleActionFn>(&Build::item_rule_action)(state, target, action);
 }
 
 bool inventory_remove(const std::string& item) {
-    return game_fn<InventoryRemoveFn, &Build::inventory_remove>()(globals() + globals_offset::inventory, inventory_id(item));
+    return game_fn<InventoryRemoveFn>(&Build::inventory_remove)(globals() + globals_offset::inventory, inventory_id(item));
 }
 
 void set_string(const std::string& key, const std::string& value) {
@@ -303,29 +307,29 @@ void show_dialog(const std::string& title, const std::string& text) {
     static std::array<uint8_t, 0x60> unknown{};
 
     field<bool>(globals(), globals_offset::dialog_flag) = true;
-    game_fn<DialogInitFn, &Build::dialog_init>()(table, unknown.data(), nullptr, "oyr_dialog");
-    game_fn<DialogLineFn, &Build::dialog_line>()(table, 1, nullptr);
+    game_fn<DialogInitFn>(&Build::dialog_init)(table, unknown.data(), nullptr, "oyr_dialog");
+    game_fn<DialogLineFn>(&Build::dialog_line)(table, 1, nullptr);
 }
 
 void* lua_newstate() {
-    auto alloc = game_fn<LuaAllocFn, &Build::lua_alloc>();
-    return game_fn<LuaNewStateFn, &Build::lua_newstate>()(alloc, nullptr);
+    auto alloc = game_fn<LuaAllocFn>(&Build::lua_alloc);
+    return game_fn<LuaNewStateFn>(&Build::lua_newstate)(alloc, nullptr);
 }
 
 void luaL_openlibs(void* state) {
-    game_fn<LuaStateFn, &Build::luaL_openlibs>()(state);
+    game_fn<LuaStateFn>(&Build::luaL_openlibs)(state);
 }
 
 void lua_setglobal(void* state, const char* name) {
-    game_fn<LuaSetGlobalFn, &Build::lua_setglobal>()(state, name);
+    game_fn<LuaSetGlobalFn>(&Build::lua_setglobal)(state, name);
 }
 
 void lua_pushstring(void* state, const char* text) {
-    game_fn<LuaPushStringFn, &Build::lua_pushstring>()(state, text);
+    game_fn<LuaPushStringFn>(&Build::lua_pushstring)(state, text);
 }
 
 bool run_script(void* context, const char* source) {
-    return game_fn<RunScriptFn, &Build::run_script>()(context, source);
+    return game_fn<RunScriptFn>(&Build::run_script)(context, source);
 }
 
 }  // namespace oyr::game

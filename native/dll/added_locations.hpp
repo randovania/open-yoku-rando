@@ -7,6 +7,10 @@
 
 #include <cstdint>
 
+namespace oyr::game {
+struct RandomizerState;
+}
+
 namespace oyr::added_locations {
 
 struct AddedLocation {
@@ -21,7 +25,7 @@ inline constexpr AddedLocation kAddedLocations[] = {
 };
 
 // Around the randomizer loader; after_loader runs before new_game's, so a new game's placement fills these too.
-void before_loader(void* randomizer_state);
-void after_loader(void* randomizer_state);
+void before_loader(game::RandomizerState* state);
+void after_loader(game::RandomizerState* state);
 
 }  // namespace oyr::added_locations
