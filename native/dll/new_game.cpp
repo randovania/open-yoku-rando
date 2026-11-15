@@ -19,7 +19,6 @@
 #include <vector>
 
 namespace oyr::new_game {
-std::optional<SeedInfo> g_seed_info;
 namespace {
 
 namespace fs = std::filesystem;
@@ -36,10 +35,13 @@ struct Seed {
     std::vector<std::pair<std::string, int32_t>> starting_items;
     std::map<uint32_t, std::string> placement;  // location id -> game item id
     warp::Location start_location;
+    SeedInfo info;
 };
 
-// Read by before_loader and used by after_loader of the same call.
+// The seed file as prepare_menu read it; empty without a valid one. Never changes afterwards.
 std::optional<Seed> g_seed;
+// g_seed's info, for seed_info().
+std::optional<SeedInfo> g_seed_info;
 
 fs::path seed_path() {
     wchar_t exe[MAX_PATH];
@@ -85,7 +87,6 @@ std::string read_seed(const fs::path& path, Seed& seed) {
     }
     int format = 0;
     std::string line;
-    SeedInfo seed_info;
     for (int number = 1; std::getline(file, line); ++number) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
@@ -121,11 +122,11 @@ std::string read_seed(const fs::path& path, Seed& seed) {
             uint32_t location = 0;
             ok = parse_number(f[1], location) && !f[2].empty() && seed.placement.emplace(location, std::string(f[2])).second;
         } else if (f[0] == "rdv_version" && f.size() == 2) {
-            seed_info.rdv_version = f[1];
-            ok = !seed_info.rdv_version.empty();
+            seed.info.rdv_version = f[1];
+            ok = !seed.info.rdv_version.empty();
         } else if (f[0] == "oyr_version" && f.size() == 2) {
-            seed_info.oyr_version = f[1];
-            ok = !seed_info.oyr_version.empty();
+            seed.info.oyr_version = f[1];
+            ok = !seed.info.oyr_version.empty();
         }
         if (!ok) {
             return std::format("{} line {} is not understood: {}", path.string(), number, line);
@@ -137,7 +138,6 @@ std::string read_seed(const fs::path& path, Seed& seed) {
     if (seed.identifier.empty() || seed.start_location.level.empty() || seed.placement.empty()) {
         return std::format("{} has no identifier, start location or placement", path.string());
     }
-    g_seed_info = std::move(seed_info);
     return {};
 }
 
@@ -233,6 +233,8 @@ MenuEntry prepare_menu() {
         entry.startable = true;
         remember_seed(seed.seed, shown_hash(seed));
         log::info("menu: seed {} is ready", seed.identifier);
+        g_seed_info = seed.info;
+        g_seed = std::move(seed);
     }
     g_menu_text = entry.text;
     return entry;
@@ -243,26 +245,18 @@ const std::string& menu_text() {
 }
 
 const char* first_level(const char* level) {
-    static std::string start_level;
+    if (!level || !g_seed || !game::is_randomizer_game() || !game::randomizer_entries().empty()) {
+        return level;
+    }
+    const warp::Location& start = g_seed->start_location;
     uint8_t* globals = game::globals();
-    if (!level || !game::is_randomizer_game() || !game::randomizer_entries().empty()) {
-        return level;
-    }
-    Seed seed;
-    if (!read_seed(seed_path(), seed).empty()) {
-        return level;
-    }
-    const warp::Location& start = seed.start_location;
-
     game::field<std::string>(globals, game::globals_offset::level) = start.level;
     game::field<int32_t>(globals, game::globals_offset::spawner) = start.spawner;
-    start_level = start.level;
-    log::info("new game of seed {} starts at {} spawner {} instead of {}", seed.identifier, start.level, start.spawner, level);
-    return start_level.c_str();
+    log::info("new game of seed {} starts at {} spawner {} instead of {}", g_seed->identifier, start.level, start.spawner, level);
+    return start.level.c_str();
 }
 
 bool before_loader(game::RandomizerState* state) {
-    g_seed.reset();
     if (!game::is_randomizer_game()) {
         return false;
     }
@@ -270,18 +264,15 @@ bool before_loader(game::RandomizerState* state) {
     if (!entries.empty()) {
         return false;  // a loaded save, or a level after the first: the loader does not roll either
     }
-
-    Seed seed;
-    if (std::string error = read_seed(seed_path(), seed); !error.empty()) {
-        log::info("new randomizer game without a Randovania seed, the game rolls its own: {}", error);
+    if (!g_seed) {
+        log::info("new randomizer game without a usable Randovania seed, the game rolls its own");
         return false;
     }
     state->difficulty = kDifficultyHard;
-    state->seed = seed.seed;
+    state->seed = g_seed->seed;
     // The loader only rolls into an empty entry vector. With a placeholder it treats the game like a loaded save:
     // fills every entry from the CSV but keeps the items, which after_loader then sets.
     entries.emplace_back();
-    g_seed = std::move(seed);
     return true;
 }
 
@@ -289,8 +280,7 @@ void after_loader(game::RandomizerState* state, bool new_game) {
     if (!new_game || !g_seed) {
         return;
     }
-    Seed seed = std::move(*g_seed);
-    g_seed.reset();
+    const Seed& seed = *g_seed;
 
     auto& entries = state->entries;
     size_t placed = 0;
