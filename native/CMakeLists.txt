@@ -26,6 +26,7 @@ add_library(open_yoku_rando SHARED
     dll/goal.cpp
     dll/hooks.cpp
     dll/item_rules.cpp
+    dll/items.cpp
     dll/log.cpp
     dll/lua_bridge.cpp
     dll/markers.cpp
@@ -36,6 +37,7 @@ add_library(open_yoku_rando SHARED
     dll/pickup_text.cpp
     dll/progressive.cpp
     dll/remote_api.cpp
+    dll/tick.cpp
     dll/verify.cpp
     dll/warp.cpp
     third_party/imgui/imgui.cpp

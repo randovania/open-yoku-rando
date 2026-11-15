@@ -2,27 +2,21 @@
 
 #include "game.hpp"
 #include "goal.hpp"
+#include "items.hpp"
 #include "log.hpp"
 #include "messages.hpp"
 #include "multiworld.hpp"
-#include "overlay.hpp"
-#include "new_game.hpp"
 #include "remote_api.hpp"
-#include "warp.hpp"
-
-#include <windows.h>
+#include "tick.hpp"
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <charconv>
 #include <cstdint>
-#include <deque>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
-#include <vector>
 
 namespace oyr::bridge {
 namespace {
@@ -59,27 +53,11 @@ struct ScriptContext {
     std::array<uint8_t, 0xf8> reserved{};
 };
 
-// One queued inventory change. Removing is a test operation and shows no dialog.
-struct ItemRequest {
-    std::string item;  // on a give, a progression: item ids from the lowest stage up, separated by commas
-    std::string text;  // shown as a message once the item is given
-    bool remove = false;
-    int32_t amount = 0;  // on a remove, how many copies to take; 0 means every copy held
-    // On a give from Randovania, the received count and inventory index it expects; dropped on any other value.
-    std::optional<size_t> received;
-    std::optional<size_t> inventory;
-};
-
 struct Result {
     bool received = false;
     bool success = false;
     std::string value;
 };
-
-std::atomic<DWORD> g_game_thread = 0;
-
-// Ticks without a new frame that still count as running, for RL.Running().
-constexpr uint32_t kRunningTicks = 8;
 
 // What RL.BufferSize reports: the chunk size Randovania's bootstrap splits on. The socket accepts more.
 constexpr uint32_t kBufferSize = 65536;
@@ -88,10 +66,6 @@ constexpr uint32_t kBufferSize = 65536;
 ScriptContext g_context;
 bool g_state_failed = false;
 Result g_result;
-std::deque<ItemRequest> g_items;
-uint32_t g_last_frame = 0;
-bool g_have_frame = false;
-uint32_t g_stalled_ticks = kRunningTicks;
 
 // Argument `index` (1-based) of the running C function, or an empty string if it isn't a string.
 std::string string_arg(lua_State* L, int index) {
@@ -113,39 +87,6 @@ int rl_log(lua_State* L) {
     return 0;
 }
 
-// The stage of a progression to give: the one above the highest stage held, or the last one again. In Yoku an upgrade
-// replaces the stage below it (the game's own pickups do that in 0x16b040), so that stage comes back to be removed.
-struct Stage {
-    std::string give;
-    std::string replaces;
-};
-
-Stage next_stage(std::string_view progression) {
-    std::vector<std::string> stages;
-    for (size_t start = 0;;) {
-        size_t comma = progression.find(',', start);
-        stages.emplace_back(progression.substr(start, comma - start));
-        if (comma == std::string_view::npos) {
-            break;
-        }
-        start = comma + 1;
-    }
-    size_t next = 0;
-    for (size_t i = stages.size(); i-- > 0;) {
-        if (game::item_count(stages[i]) > 0) {
-            next = i + 1;
-            break;
-        }
-    }
-    if (next == 0) {
-        return {stages.front(), {}};
-    }
-    if (next == stages.size()) {
-        return {stages.back(), {}};
-    }
-    return {stages[next], stages[next - 1]};
-}
-
 // A number passed as a string, like RemoveItem's amount; empty when it is missing or not a number.
 std::optional<size_t> size_arg(lua_State* L, int index) {
     const std::string text = string_arg(L, index);
@@ -158,10 +99,7 @@ std::optional<size_t> size_arg(lua_State* L, int index) {
 
 // RL.GiveItem(item, text [, received, inventory])
 int rl_give_item(lua_State* L) {
-    ItemRequest request{string_arg(L, 1), string_arg(L, 2)};
-    request.received = size_arg(L, 3);
-    request.inventory = size_arg(L, 4);
-    g_items.push_back(std::move(request));
+    items::queue_give(string_arg(L, 1), string_arg(L, 2), size_arg(L, 3), size_arg(L, 4));
     return 0;
 }
 
@@ -170,23 +108,12 @@ int rl_show_message(lua_State* L) {
     return 0;
 }
 
-// Whether a give from Randovania was named from the state the game is still in.
-bool still_current(const ItemRequest& request) {
-    if ((request.received || request.inventory) && !multiworld::save_matches()) {
-        return false;
-    }
-    if (request.received && *request.received != multiworld::received_count()) {
-        return false;
-    }
-    return !request.inventory || *request.inventory == multiworld::inventory_index();
-}
-
 // RL.RemoveItem(item [, amount]): the amount comes as a string, because that is what string_arg reads.
 int rl_remove_item(lua_State* L) {
     const std::string amount = string_arg(L, 2);
     int32_t count = 0;
     std::from_chars(amount.data(), amount.data() + amount.size(), count);
-    g_items.push_back({string_arg(L, 1), {}, true, std::max(count, 0)});
+    items::queue_remove(string_arg(L, 1), count);
     return 0;
 }
 
@@ -196,7 +123,7 @@ int rl_level(lua_State* L) {
 }
 
 int rl_running(lua_State* L) {
-    game::lua_pushstring(L, g_stalled_ticks < kRunningTicks ? "1" : "");
+    game::lua_pushstring(L, tick::game_running() ? "1" : "");
     return 1;
 }
 
@@ -323,7 +250,7 @@ std::string wrap(std::string_view code) {
         long_string(code), kBufferSize);
 }
 
-void run_remote_lua(const remote::LuaRequest& request) {
+void run(const remote::LuaRequest& request) {
     if (!g_context.state && !g_state_failed && !create_state()) {
         g_state_failed = true;
     }
@@ -342,115 +269,23 @@ void run_remote_lua(const remote::LuaRequest& request) {
     }
 }
 
-}  // namespace
-
-void on_tick() {
-    // The first thread that ticks is the game thread; ticks on any other thread are ignored.
-    DWORD thread = GetCurrentThreadId();
-    DWORD game_thread = 0;
-    if (g_game_thread.compare_exchange_strong(game_thread, thread)) {
-        log::info("game thread {}", thread);
-    } else if (game_thread != thread) {
-        return;
-    }
-    if (!game::globals()) {
-        return;
-    }
-    static bool overlay_tried = false;
-    if (!overlay_tried) {
-        overlay_tried = true;
-        if (std::string error = overlay::install(); !error.empty()) {
-            log::info("no overlay, messages are only logged: {}", error);
-        } else {
-            log::info("overlay hooked");
-        }
-    }
-    // The UI text loads after the DLL starts, so the menu entry's key is added here.
-    if (!game::in_game()) {
-        game::ensure_ui_string(new_game::kMenuTextKey, new_game::menu_text());
-    }
-    game::ensure_dialog_strings(new_game::texts());
-
-    uint32_t frame = game::frame_counter();
-    if (g_have_frame && frame == g_last_frame) {
-        g_stalled_ticks = std::min(g_stalled_ticks + 1, kRunningTicks);
-    } else {
-        g_stalled_ticks = 0;
-    }
-    g_last_frame = frame;
-    g_have_frame = true;
-
-    multiworld::update_inventory_index();
-    warp::on_tick();
-
-    // Only in a level, on a frame the game really ran (not paused) and with no dialog open.
-    // A give waits for the message before it, so items arrive one at a time, each with its own message.
-    if (!g_items.empty() && game::in_game() && g_stalled_ticks == 0 && !game::dialog_open() &&
-        (g_items.front().remove || !messages::busy())) {
-        ItemRequest request = std::move(g_items.front());
-        g_items.pop_front();
-        if (request.remove) {
-            int32_t held = game::item_count(request.item);
-            int32_t wanted = request.amount > 0 ? std::min(request.amount, held) : held;
-            for (int32_t i = 0; i < wanted; ++i) {
-                game::inventory_remove(request.item);
-            }
-            log::info("removed {} of {}, {} were held", wanted, request.item, held);
-        } else if (!still_current(request)) {
-            log::info("not giving {}: sent for received {} and inventory {}, the game is at {} and {}", request.item,
-                      request.received.value_or(0), request.inventory.value_or(0), multiworld::received_count(),
-                      multiworld::inventory_index());
-            multiworld::resend_save_state();
-        } else if (game::LootResult loot = game::give_loot(request.item); loot == game::LootResult::Failed) {
-            // Not counted; Randovania sends it again after the resend.
-            multiworld::resend_save_state();
-        } else if (loot == game::LootResult::Later) {
-            g_items.push_front(std::move(request));
-        } else {
-            // Fruit is no inventory item: the game hands it out as loot, as at a fruit location.
-            if (loot == game::LootResult::NotLoot) {
-                Stage stage = next_stage(request.item);
-                log::info("giving {}{}", stage.give, stage.replaces.empty() ? "" : " in place of " + stage.replaces);
-                game::inventory_add(stage.give);
-                if (!stage.replaces.empty()) {
-                    game::inventory_remove(stage.replaces);
-                }
-            }
-            // Counted in the save, so a reload does not deliver it again.
-            multiworld::note_pickup_received();
-            messages::push(request.text);
-        }
-    }
-
-    game::check_item_rules(g_stalled_ticks == 0 && !game::dialog_open());
-    messages::on_tick(g_stalled_ticks == 0);
-
-    // A pickup the game shows no dialog for gets its location's line from here, under the same conditions.
-    game::watch_collected_locations();
-    if (game::in_game() && g_stalled_ticks == 0 && !game::dialog_open()) {
-        if (auto dialog = game::pop_location_dialog()) {
-            game::show_dialog(dialog->first, dialog->second);
-        }
-    }
-
-    multiworld::on_tick();
-
-    if (!remote::has_pending_lua()) {
-        return;
-    }
-    if (auto request = remote::pop_lua()) {
-        run_remote_lua(*request);
-    }
-}
-
-namespace {
 NativeFn g_unlock_achievement = nullptr;
 
 int hook_unlock_achievement(lua_State* L) {
     goal::on_achievement(string_arg(L, 1));
     return g_unlock_achievement(L);
 }
+
 }  // namespace
+
+void run_remote_lua() {
+    if (!remote::has_pending_lua()) {
+        return;
+    }
+    if (auto request = remote::pop_lua()) {
+        run(*request);
+    }
+}
 
 NativeFn wrap_unlock_achievement(NativeFn original) {
     g_unlock_achievement = original;

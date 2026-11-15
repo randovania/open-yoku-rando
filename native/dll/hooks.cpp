@@ -6,6 +6,7 @@
 #include "log.hpp"
 #include "lua_bridge.hpp"
 #include "new_game.hpp"
+#include "tick.hpp"
 #include "warp.hpp"
 
 #include <windows.h>
@@ -70,7 +71,7 @@ void check_text_language() {
 
 uint64_t hook_tick(void* a, void* b, void* c, void* d) {
     check_text_language();
-    bridge::on_tick();
+    tick::on_tick();
     return g_tick(a, b, c, d);
 }
 
