@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <array>
-#include <format>
 #include <intrin.h>
 #include <map>
 

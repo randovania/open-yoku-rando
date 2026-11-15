@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <string>
-#include <string_view>
 
 // Pause menu warps in a Randovania save: save, then continue at the target.
 // Start = the seed's start location (markers::kStart, set by new_game); Village = hub_village checkpoint 4226, once
