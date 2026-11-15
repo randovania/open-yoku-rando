@@ -110,6 +110,9 @@ struct Build {
     uintptr_t unpause;
     // const char**(globals+0x8fd0, const char** out, int32 language, const char* key): the UI text of key
     uintptr_t ui_text;
+    // void(globals+0x8fd0, const char* language): loads the ui, dialog and quest texts of that language; every language
+    // change of the game (config, platform default, options menu) ends here. "en" clears the translation tables.
+    uintptr_t texts_set_language;
     // void(SaveManager*, Object* spawner): saves the game at that spawner, or with null at the running level
     uintptr_t checkpoint_save;
     // void(SaveManager*): writes the globals into the save document and queues the file write
@@ -178,6 +181,7 @@ inline constexpr Build kEpic{
     .pause_menu_close = 0x2a4de0,
     .unpause = 0x236f40,
     .ui_text = 0x27cbb0,
+    .texts_set_language = 0x27c020,
     .checkpoint_save = 0x26b740,
     .save_globals = 0x26baf0,
     .save_apply = 0x269be0,
@@ -238,6 +242,7 @@ inline constexpr Build kGog{
     .pause_menu_close = 0x2a4690,
     .unpause = 0x2367f0,
     .ui_text = 0x27c460,
+    .texts_set_language = 0x27b8d0,
     .checkpoint_save = 0x26aff0,
     .save_globals = 0x26b3a0,
     .save_apply = 0x269490,
@@ -299,6 +304,7 @@ inline constexpr Build kSteam{
     .pause_menu_close = 0x2a54a0,
     .unpause = 0x237640,
     .ui_text = 0x27d270,
+    .texts_set_language = 0x27c6e0,
     .checkpoint_save = 0x26be00,
     .save_globals = 0x26c1b0,
     .save_apply = 0x26a2a0,

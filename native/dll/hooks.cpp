@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -38,8 +39,36 @@ GameFn g_slot_label_format = nullptr;
 GameFn g_beacon_use = nullptr;
 GameFn g_pause_menu_command = nullptr;
 GameFn g_level_load = nullptr;
+GameFn g_texts_set_language = nullptr;  // the trampoline: the replaced first instruction, then the rest of the function
+
+constexpr char kLanguage[] = "en";
+
+// Only English is supported: every language the game asks for loads the English texts instead.
+uint64_t hook_texts_set_language(void* texts, void* language, void* c, void* d) {
+    const char* asked = static_cast<const char*>(language);
+    if (asked && std::strcmp(asked, kLanguage) != 0) {
+        log::info("loading the {} texts instead of {}", kLanguage, asked);
+    }
+    return g_texts_set_language(texts, const_cast<char*>(kLanguage), c, d);
+}
+
+// Logs once if the game had loaded its texts in another language before the hook was in place.
+void check_text_language() {
+    static std::atomic<bool> checked = false;
+    if (checked.load() || !game::globals()) {
+        return;
+    }
+    std::string language = game::text_language();
+    if (language.empty() || checked.exchange(true)) {
+        return;
+    }
+    if (language != kLanguage) {
+        log::info("the texts were loaded in {} before the language hook was installed", language);
+    }
+}
 
 uint64_t hook_tick(void* a, void* b, void* c, void* d) {
+    check_text_language();
     bridge::on_tick();
     return g_tick(a, b, c, d);
 }
@@ -312,6 +341,23 @@ std::string patch_pause_menu(CodeCave& cave) {
     return {};
 }
 
+// texts_set_language starts with the 5-byte mov [rsp + 0x18], rbx
+std::string patch_texts_set_language(CodeCave& cave) {
+    uint8_t* function = game::base() + game::build().texts_set_language;
+    uint8_t* trampoline = cave.run_then_jump({0x48, 0x89, 0x5c, 0x24, 0x18}, function + 5);
+    uint8_t* entry = cave.jump_to(reinterpret_cast<void*>(&hook_texts_set_language));
+    if (!trampoline || !entry) {
+        return "cannot write to the code cave";
+    }
+    g_texts_set_language = reinterpret_cast<GameFn>(trampoline);
+    std::array<uint8_t, 5> jump{0xe9, 0, 0, 0, 0};
+    if (!patch(function, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
+        !retarget(game::build().texts_set_language + 1, game::build().texts_set_language + 5, entry)) {
+        return "cannot hook texts_set_language";
+    }
+    return {};
+}
+
 }  // namespace
 
 std::string install() {
@@ -331,6 +377,9 @@ std::string install() {
     }
 
     CodeCave cave;
+    if (std::string error = patch_texts_set_language(cave); !error.empty()) {
+        return error;
+    }
     if (!redirect_call(game::build().randomizer_loader_call, cave.jump_to(&hook_randomizer_loader))) {
         return std::format("cannot redirect the call at {:#x}", game::build().randomizer_loader_call);
     }
