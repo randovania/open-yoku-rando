@@ -6,20 +6,21 @@ Everything goes into MOD_FOLDER, except the xinput9_1_0.dll proxy, which Windows
 - `texts.strings`, the Nothing texts, each location's line (`items/nothing_<location id>_1`) and the TEXT_FIXES,
   which the DLL sets in the dialog table;
 - `items/<id>_x102.sim`, models the DLL serves in place of `processed/items/<name>`;
-- `randomizer_scripts.csv`, the game's own with Nim's ceremony waiting for the required beacons, which the DLL serves
-  in place of `data/text/randomizer_scripts.csv`;
+- `randomizer_scripts.csv`, the game's own with the mod's script changes, which the DLL serves in place of
+  `data/text/randomizer_scripts.csv`;
 - `dialog_anim.strings`, the game's own with an animation for Nim's beacon hint, which the DLL serves in place of
   `processed/text/dialog_anim.strings`;
 - `seed.txt`, written by seed_file.
 """
 
 import dataclasses
+import json
 from pathlib import Path
 
 from open_yoku_rando import sim_texture
 from open_yoku_rando.file_util import atomic_write_bytes
 from open_yoku_rando.files import files_path
-from open_yoku_rando.game_install import dialog_anims_path, scripts_csv_path
+from open_yoku_rando.game_install import dialog_anims_path, level_json_path, scripts_csv_path
 from open_yoku_rando.items import DEFAULT_MODEL, MODEL_SUFFIX, NOTHING_ITEM_ID
 from open_yoku_rando.logger import LOG
 
@@ -108,13 +109,61 @@ def beacon_hint(required: int) -> str:
     return f"The ritual needs the light of <style1>{beacons}</style>. Come back once they burn!"
 
 
-def gate_ceremony(scripts: bytes, required: int) -> bytes:
-    """The game's randomizer_scripts.csv with Nim's ceremony refused until `required` beacons are lit."""
-    if scripts.count(_CEREMONY_START) != 1:
-        raise ValueError("randomizer_scripts.csv does not start Nim's ceremony the way the patcher expects")
-    gate = (f' if hasCompletedQuest("{BEACON_MARKER}{required}") == 0 then'
-            f" dialogLine({BEACON_HINT_LINE}) dialogEnd() return end")
-    return scripts.replace(_CEREMONY_START, _CEREMONY_START + gate.encode("utf-8"))
+SCRIPT_PATCHES = {
+    # Tunguska's reward talk, after the sixth clean Sootling
+    "peak_filthy_flat:1030": ('triggerOutput("talk3done")', ' addItem("tunguska_reward")'),
+}
+"""Object scripts of the game's levels, by spawn id: (anchor, inserted after it)."""
+
+
+def one_line_script(script: str) -> str:
+    """A level's Lua script as one line, as a `replace_script` cell needs it: comments dropped, lines joined."""
+    lines = (line.split("--", 1)[0].strip() for line in script.splitlines())
+    return " ".join(line for line in lines if line)
+
+
+def object_script(game_path: Path, spawn_id: str) -> str:
+    """The Lua script of the object `level:id` in that level's level.json."""
+    level, object_id = spawn_id.split(":")
+    # The file ends with a NUL after the JSON.
+    text = level_json_path(game_path, level).read_bytes().decode("utf-8").rstrip("\0")
+    for game_object in json.loads(text)["objects"]:
+        if game_object.get("id") == int(object_id) and "script" in game_object:
+            return game_object["script"]
+    raise ValueError(f"{level} has no object {object_id} with a script")
+
+
+def patched_object_scripts(game_path: Path) -> dict[str, str]:
+    """Each of SCRIPT_PATCHES applied to the game's script, on one line, by spawn id."""
+    patched = {}
+    for spawn_id, (anchor, insertion) in SCRIPT_PATCHES.items():
+        script = one_line_script(object_script(game_path, spawn_id))
+        if script.count(anchor) != 1:
+            raise ValueError(f"the script of {spawn_id} does not have {anchor} the way the patcher expects")
+        patched[spawn_id] = script.replace(anchor, anchor + insertion)
+    return patched
+
+
+def patch_scripts(scripts: bytes, overrides: dict[str, str], required_beacons: int = 0) -> bytes:
+    """
+    The game's randomizer_scripts.csv with a `replace_script` line for each of `overrides` (spawn id -> script) and,
+    with `required_beacons`, Nim's ceremony (the game's own override) refused until that many beacons are lit.
+    """
+    body = scripts.rstrip(b"\0")
+    end = scripts[len(body):]
+    if required_beacons > 0:
+        if body.count(_CEREMONY_START) != 1:
+            raise ValueError("randomizer_scripts.csv does not start Nim's ceremony the way the patcher expects")
+        gate = (f' if hasCompletedQuest("{BEACON_MARKER}{required_beacons}") == 0 then'
+                f" dialogLine({BEACON_HINT_LINE}) dialogEnd() return end")
+        body = body.replace(_CEREMONY_START, _CEREMONY_START + gate.encode("utf-8"))
+    if not body.endswith(b"\n"):
+        body += b"\r\n"
+    for spawn_id, script in overrides.items():
+        if f"replace_script\t{spawn_id}\t".encode() in body:
+            raise ValueError(f"randomizer_scripts.csv already replaces the script of {spawn_id}")
+        body += f"replace_script\t{spawn_id}\t{script}\r\n".encode()
+    return body + end
 
 
 _HINT_ANIMATION = "talk_1,hold_convo_idle"
@@ -144,7 +193,7 @@ class Install:
     written: tuple[str, ...]
     """Game-relative paths that were written."""
     removed: tuple[str, ...]
-    """Files a previous install left that this one does not use: models, script overrides and dialog animations."""
+    """Files a previous install left that this one does not use."""
 
 
 def installed_file_source(package_relative: str) -> Path:
@@ -172,21 +221,22 @@ def install_files(
     contents = {target: installed_file_source(source).read_bytes() for target, source in NATIVE_FILES.items()}
     for item_id, data in models.items():
         contents[f"{ITEMS_FOLDER}/{item_id}{MODEL_SUFFIX}"] = data
+    contents[SCRIPTS_PATH] = patch_scripts(
+        scripts_csv_path(game_path).read_bytes(), patched_object_scripts(game_path), required_beacons
+    )
     texts = nothing_strings(captions, tuple(models))
     if required_beacons > 0:
-        contents[SCRIPTS_PATH] = gate_ceremony(scripts_csv_path(game_path).read_bytes(), required_beacons)
         contents[ANIMS_PATH] = animate_hint(dialog_anims_path(game_path).read_bytes())
         texts.append((f"nim_{BEACON_HINT_LINE}", beacon_hint(required_beacons)))
     texts.extend(TEXT_FIXES.items())
     contents[TEXTS_PATH] = strings_file(texts)
 
     removed = []
-    for override in (SCRIPTS_PATH, ANIMS_PATH):
-        stale = game_path.joinpath(override)
-        if override not in contents and stale.is_file():
-            stale.unlink()
-            removed.append(override)
-            LOG.debug("Removed %s", override)
+    stale_anims = game_path.joinpath(ANIMS_PATH)
+    if ANIMS_PATH not in contents and stale_anims.is_file():
+        stale_anims.unlink()
+        removed.append(ANIMS_PATH)
+        LOG.debug("Removed %s", ANIMS_PATH)
     items_folder = game_path.joinpath(ITEMS_FOLDER)
     if items_folder.is_dir():
         for stale in sorted(items_folder.glob(f"*{MODEL_SUFFIX}")):

@@ -20,6 +20,7 @@ add_compile_options(/W4 /utf-8 /permissive- /Zi)
 add_link_options(/DEBUG)
 
 add_library(open_yoku_rando SHARED
+    dll/added_locations.cpp
     dll/entry.cpp
     dll/game.cpp
     dll/goal.cpp

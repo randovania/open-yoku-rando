@@ -44,9 +44,9 @@
         },
         "pickups": {
             "type": "array",
-            "description": "One pickup for each of the 248 randomizer locations.",
-            "minItems": 248,
-            "maxItems": 248,
+            "description": "One pickup for each of the 249 randomizer locations.",
+            "minItems": 249,
+            "maxItems": 249,
             "items": {
                 "$ref": "#/$defs/pickup"
             }
