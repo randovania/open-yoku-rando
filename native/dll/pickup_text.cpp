@@ -46,18 +46,15 @@ std::string item_title(const std::string& item) {
         if (id.empty()) {
             continue;
         }
-        bool found = false;
-        std::string name = get_string(std::format("items/{}_name", id), &found);
-        if (found) {
-            return name;
+        if (std::optional<std::string> name = get_string(std::format("items/{}_name", id))) {
+            return *name;
         }
     }
     return item;
 }
 
 void show_location_text_for_item(const std::string& item, uint32_t location) {
-    bool found = false;
-    std::string text = location != 0 ? get_string(location_line_key(location), &found) : std::string();
+    std::optional<std::string> text = location != 0 ? get_string(location_line_key(location)) : std::nullopt;
     for (const std::string& id : {item, text_alias(item)}) {
         if (id.empty()) {
             continue;
@@ -65,24 +62,18 @@ void show_location_text_for_item(const std::string& item, uint32_t location) {
         std::string shown = std::format("items/{}_1", id);
         auto original = g_original_item_text.find(id);
         if (original == g_original_item_text.end()) {
-            bool had = false;
-            std::string own = get_string(shown, &had);
-            original = g_original_item_text.emplace(id, had ? std::optional(own) : std::nullopt).first;
+            original = g_original_item_text.emplace(id, get_string(shown)).first;
         }
-        if (found) {
+        if (text) {
             // Fruit and Wickerlings have no name of their own; give them one so the speaker isn't blank.
             std::string name = std::format("items/{}_name", id);
-            bool named = false;
-            get_string(name, &named);
-            if (!named) {
+            if (!has_string(name)) {
                 set_string(name, id);
             }
-            set_string(shown, text);
+            set_string(shown, *text);
             g_pickup_dialog_name = std::format("items/{}_{}", nothing_item, location);
             std::string speaker = g_pickup_dialog_name + "_name";
-            bool has_speaker = false;
-            get_string(speaker, &has_speaker);
-            if (!has_speaker) {
+            if (!has_string(speaker)) {
                 set_string(speaker, item_title(item));
             }
         } else if (original->second) {
@@ -91,7 +82,7 @@ void show_location_text_for_item(const std::string& item, uint32_t location) {
             erase_string(shown);
         }
     }
-    log::info("{} pickup at location {}: {}", item, location, found ? "showing the location's line" : "own text");
+    log::info("{} pickup at location {}: {}", item, location, text ? "showing the location's line" : "own text");
 }
 
 }  // namespace
@@ -119,20 +110,19 @@ void on_bubble_pickup(void* pickup) {
     }
     std::string shown = std::format("items/{}_1", nothing_item);
     if (!g_default_nothing_text) {
-        g_default_nothing_text = get_string(shown);
+        g_default_nothing_text = get_string(shown).value_or(std::string());
     }
 
-    bool found = false;
     std::string key = location_line_key(location);
-    std::string text = location != 0 ? get_string(key, &found) : std::string();
-    set_string(shown, found ? text : *g_default_nothing_text);
+    std::optional<std::string> text = location != 0 ? get_string(key) : std::nullopt;
+    set_string(shown, text ? *text : *g_default_nothing_text);
 
     // Before the game's inventory_add, so every Nothing stacks in one inventory slot.
     if (item != nothing_item) {
         log::info("Nothing pickup: collapsing {} to {}", item, nothing_item);
         item = nothing_item;
     }
-    log::info("Nothing pickup at location {}: {} {}", location, found ? "showing" : "no text baked for", found ? text : key);
+    log::info("Nothing pickup at location {}: {} {}", location, text ? "showing" : "no text baked for", text ? *text : key);
 }
 
 void watch_collected_locations() {
@@ -162,11 +152,10 @@ void watch_collected_locations() {
         if (g_dialog_locations.erase(location) > 0) {
             continue;
         }
-        bool found = false;
-        std::string text = get_string(location_line_key(location), &found);
-        log::info("{} collected at location {} without pickup_dialog: {}", entry.item, location, found ? "showing the location's line" : "no line baked");
-        if (found) {
-            g_location_dialogs.emplace_back(item_title(entry.item), text);
+        std::optional<std::string> text = get_string(location_line_key(location));
+        log::info("{} collected at location {} without pickup_dialog: {}", entry.item, location, text ? "showing the location's line" : "no line baked");
+        if (text) {
+            g_location_dialogs.emplace_back(item_title(entry.item), std::move(*text));
         }
     }
 }

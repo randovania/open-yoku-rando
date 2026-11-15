@@ -222,19 +222,17 @@ void erase_string(const std::string& key) {
     std::erase_if(*strings_of(globals_offset::dialog_file), [&key](const auto& entry) { return entry[0] == key; });
 }
 
-std::string get_string(const std::string& key, bool* found) {
+std::optional<std::string> get_string(const std::string& key) {
     for (const auto& entry : *strings_of(globals_offset::dialog_file)) {
         if (entry[0] == key) {
-            if (found) {
-                *found = true;
-            }
             return entry[1];
         }
     }
-    if (found) {
-        *found = false;
-    }
-    return {};
+    return std::nullopt;
+}
+
+bool has_string(const std::string& key) {
+    return std::ranges::any_of(*strings_of(globals_offset::dialog_file), [&key](const auto& entry) { return entry[0] == key; });
 }
 
 void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>>& entries) {

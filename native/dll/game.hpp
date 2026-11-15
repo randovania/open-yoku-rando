@@ -217,8 +217,9 @@ void item_rule_action(RandomizerState* state, int32_t target, const char* action
 bool inventory_remove(const std::string& item);
 void set_string(const std::string& key, const std::string& value);
 void erase_string(const std::string& key);
-// The dialog string for key, or empty; `found` tells the two apart.
-std::string get_string(const std::string& key, bool* found = nullptr);
+// The dialog string for key; nullopt if the dialog table has no such key.
+std::optional<std::string> get_string(const std::string& key);
+bool has_string(const std::string& key);
 // Sets `entries` in the dialog table, adding missing keys and overwriting the game's own: every line with the key, where
 // the game has alternative lines under one key. Cheap per tick: only rechecks when the table was replaced or resized.
 void ensure_dialog_strings(const std::vector<std::pair<std::string, std::string>>& entries);
