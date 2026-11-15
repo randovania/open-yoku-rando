@@ -275,8 +275,35 @@ bool retarget(uintptr_t operand, uintptr_t instruction_end, const void* target) 
     return patch(game::base() + operand, &relative, sizeof(relative), PAGE_EXECUTE_READWRITE);
 }
 
-bool redirect_call(uintptr_t site, uint8_t* stub) {
+// The `call rel32` at site calls stub instead.
+bool redirect_call(uintptr_t site, const void* stub) {
     return stub && retarget(site + 1, site + 5, stub);
+}
+
+// The 7-byte `lea reg, [rip + rel32]` at `lea` loads target instead.
+bool retarget_lea(uintptr_t lea, const void* target) {
+    return target && retarget(lea + 3, lea + 7, target);
+}
+
+// Replaces the `length` bytes of code at `at` with `jmp rel32` to target, padded with nops.
+bool jump_from(uintptr_t at, size_t length, const void* target) {
+    std::array<uint8_t, 16> jump{};
+    jump.fill(0x90);
+    jump[0] = 0xe9;
+    return target && length >= 5 && length <= jump.size() &&
+           patch(game::base() + at, jump.data(), length, PAGE_EXECUTE_READWRITE) && retarget(at + 1, at + 5, target);
+}
+
+// Where the `call rel32` at site goes.
+uint8_t* call_target(uintptr_t site) {
+    int32_t relative = 0;
+    std::memcpy(&relative, game::base() + site + 1, sizeof(relative));
+    return game::base() + site + 5 + relative;
+}
+
+bool patch_vtable_slot(uintptr_t slot, void* hook) {
+    auto value = reinterpret_cast<uintptr_t>(hook);
+    return patch(game::base() + slot, &value, sizeof(value), PAGE_READWRITE);
 }
 
 // An empty slot gets one entry, "Start Randovania Seed": its first entry gets our text key and `slot_newrandom_`,
@@ -285,7 +312,7 @@ std::string patch_menu(CodeCave& cave) {
     const game::Build& build = game::build();
     std::string_view key = new_game::kMenuTextKey;
     uint8_t* text = cave.place(std::span(reinterpret_cast<const uint8_t*>(key.data()), key.size() + 1));
-    if (!text || !retarget(build.menu_start_text + 3, build.menu_start_text + 7, text)) {
+    if (!retarget_lea(build.menu_start_text, text)) {
         return "cannot point the start entry at its text";
     }
     // Without a seed the entry shows why and gets a command nothing handles.
@@ -295,7 +322,7 @@ std::string patch_menu(CodeCave& cave) {
         std::string_view inert = new_game::kNoSeedCommand;
         command = cave.place(std::span(reinterpret_cast<const uint8_t*>(inert.data()), inert.size() + 1));
     }
-    if (!command || !retarget(build.menu_start_command + 3, build.menu_start_command + 7, command)) {
+    if (!retarget_lea(build.menu_start_command, command)) {
         return "cannot point the start entry at its command";
     }
     // The code after the submenu expects r12 == 0: xor r12d, r12d.
@@ -303,10 +330,8 @@ std::string patch_menu(CodeCave& cave) {
     if (!skip) {
         return "cannot write to the code cave";
     }
-    // jmp rel32 to that stub over the 7-byte mov at menu_skip_from, plus two nops.
-    std::array<uint8_t, 7> jump{0xe9, 0, 0, 0, 0, 0x90, 0x90};
-    if (!patch(game::base() + build.menu_skip_from, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
-        !retarget(build.menu_skip_from + 1, build.menu_skip_from + 5, skip)) {
+    // To that stub, over the 7-byte mov at menu_skip_from.
+    if (!jump_from(build.menu_skip_from, 7, skip)) {
         return "cannot jump over the Randomize mode submenu";
     }
     return {};
@@ -334,13 +359,11 @@ std::string patch_pause_menu(CodeCave& cave) {
     if (!entries) {
         return "cannot write to the code cave";
     }
-    std::array<uint8_t, 7> jump{0xe9, 0, 0, 0, 0, 0x90, 0x90};
-    if (!patch(base + build.pause_menu_exit_entry, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
-        !retarget(build.pause_menu_exit_entry + 1, build.pause_menu_exit_entry + 5, entries)) {
+    if (!jump_from(build.pause_menu_exit_entry, 7, entries)) {
         return "cannot add the warp entries to the pause menu";
     }
     g_pause_menu_command = reinterpret_cast<GameFn>(base + build.pause_menu_command);
-    if (!retarget(build.pause_menu_command_lea + 3, build.pause_menu_command_lea + 7, cave.jump_to(reinterpret_cast<void*>(&hook_pause_menu_command)))) {
+    if (!retarget_lea(build.pause_menu_command_lea, cave.jump_to(reinterpret_cast<void*>(&hook_pause_menu_command)))) {
         return "cannot point the pause menu at the DLL's command handler";
     }
     return {};
@@ -348,16 +371,14 @@ std::string patch_pause_menu(CodeCave& cave) {
 
 // texts_set_language starts with the 5-byte mov [rsp + 0x18], rbx
 std::string patch_texts_set_language(CodeCave& cave) {
-    uint8_t* function = game::base() + game::build().texts_set_language;
-    uint8_t* trampoline = cave.run_then_jump({0x48, 0x89, 0x5c, 0x24, 0x18}, function + 5);
+    uintptr_t function = game::build().texts_set_language;
+    uint8_t* trampoline = cave.run_then_jump({0x48, 0x89, 0x5c, 0x24, 0x18}, game::base() + function + 5);
     uint8_t* entry = cave.jump_to(reinterpret_cast<void*>(&hook_texts_set_language));
     if (!trampoline || !entry) {
         return "cannot write to the code cave";
     }
     g_texts_set_language = reinterpret_cast<GameFn>(trampoline);
-    std::array<uint8_t, 5> jump{0xe9, 0, 0, 0, 0};
-    if (!patch(function, jump.data(), jump.size(), PAGE_EXECUTE_READWRITE) ||
-        !retarget(game::build().texts_set_language + 1, game::build().texts_set_language + 5, entry)) {
+    if (!jump_from(function, 5, entry)) {
         return "cannot hook texts_set_language";
     }
     return {};
@@ -366,13 +387,18 @@ std::string patch_texts_set_language(CodeCave& cave) {
 }  // namespace
 
 std::string install() {
+    using game::Build;
+    using game::game_fn;
+    const Build& build = game::build();
     uint8_t* base = game::base();
-    g_tick = reinterpret_cast<GameFn>(base + game::build().tick);
-    g_pickup_dialog = reinterpret_cast<GameFn>(base + game::build().pickup_dialog);
-    g_randomizer_loader = reinterpret_cast<GameFn>(base + game::build().randomizer_loader);
-    g_dialog_init = reinterpret_cast<GameFn>(base + game::build().dialog_init);
-    g_beacon_use = reinterpret_cast<GameFn>(base + game::build().beacon_use);
-    g_level_load = reinterpret_cast<GameFn>(base + game::build().level_load);
+    g_tick = game_fn<GameFn>(&Build::tick);
+    g_pickup_dialog = game_fn<GameFn>(&Build::pickup_dialog);
+    g_randomizer_loader = game_fn<GameFn>(&Build::randomizer_loader);
+    g_dialog_init = game_fn<GameFn>(&Build::dialog_init);
+    g_beacon_use = game_fn<GameFn>(&Build::beacon_use);
+    g_level_load = game_fn<GameFn>(&Build::level_load);
+    // The original sprintf, read before the call is redirected.
+    g_slot_label_format = reinterpret_cast<GameFn>(call_target(build.slot_label_format_call));
 
     // First, so as few files as possible are opened before it.
     g_fopen = reinterpret_cast<FopenFn>(hook_import("fopen", reinterpret_cast<void*>(&hook_fopen)));
@@ -385,22 +411,17 @@ std::string install() {
     if (std::string error = patch_texts_set_language(cave); !error.empty()) {
         return error;
     }
-    if (!redirect_call(game::build().randomizer_loader_call, cave.jump_to(&hook_randomizer_loader))) {
-        return std::format("cannot redirect the call at {:#x}", game::build().randomizer_loader_call);
-    }
-    if (!redirect_call(game::build().load_level_native_call, cave.jump_to(&hook_load_level_native))) {
-        return std::format("cannot redirect the call at {:#x}", game::build().load_level_native_call);
-    }
-    // The original sprintf, read before the call is redirected.
-    uintptr_t label_call = game::build().slot_label_format_call;
-    int32_t label_rel = 0;
-    std::memcpy(&label_rel, base + label_call + 1, sizeof(label_rel));
-    g_slot_label_format = reinterpret_cast<GameFn>(base + label_call + 5 + label_rel);
-    if (!redirect_call(game::build().slot_label_format_call, cave.jump_to(&hook_slot_label_format))) {
-        return std::format("cannot redirect the call at {:#x}", game::build().slot_label_format_call);
-    }
-    if (!redirect_call(game::build().pickup_dialog_init_call, cave.jump_to(&hook_pickup_dialog_init))) {
-        return std::format("cannot redirect the call at {:#x}", game::build().pickup_dialog_init_call);
+    // Calls in the game that go to the DLL instead.
+    const std::pair<uintptr_t, void*> calls[] = {
+        {build.randomizer_loader_call, reinterpret_cast<void*>(&hook_randomizer_loader)},
+        {build.load_level_native_call, reinterpret_cast<void*>(&hook_load_level_native)},
+        {build.slot_label_format_call, reinterpret_cast<void*>(&hook_slot_label_format)},
+        {build.pickup_dialog_init_call, reinterpret_cast<void*>(&hook_pickup_dialog_init)},
+    };
+    for (const auto& [site, hook] : calls) {
+        if (!redirect_call(site, cave.jump_to(hook))) {
+            return std::format("cannot redirect the call at {:#x}", site);
+        }
     }
     if (std::string error = patch_menu(cave); !error.empty()) {
         return error;
@@ -415,23 +436,21 @@ std::string install() {
         return "the game registers no unlockAchievement native";
     }
     auto wrapped = bridge::wrap_unlock_achievement(reinterpret_cast<bridge::NativeFn>(base + unlock->rva));
-    if (!retarget(unlock->registration + 3, unlock->registration + 7, cave.jump_to(reinterpret_cast<void*>(wrapped)))) {
+    if (!retarget_lea(unlock->registration, cave.jump_to(reinterpret_cast<void*>(wrapped)))) {
         return std::format("cannot point the unlockAchievement registration at {:#x} to the DLL", unlock->registration);
     }
 
-    auto tick = reinterpret_cast<uintptr_t>(&hook_tick);
-    for (uintptr_t slot : game::build().tick_vtable_slots) {
-        if (!patch(base + slot, &tick, sizeof(tick), PAGE_READWRITE)) {
+    // Methods the game calls through its vtables; last, so the DLL's code only runs once everything is in place.
+    std::vector<std::pair<uintptr_t, void*>> slots;
+    for (uintptr_t slot : build.tick_vtable_slots) {
+        slots.emplace_back(slot, reinterpret_cast<void*>(&hook_tick));
+    }
+    slots.emplace_back(build.beacon_use_vtable_slot, reinterpret_cast<void*>(&hook_beacon_use));
+    slots.emplace_back(build.pickup_dialog_vtable_slot, reinterpret_cast<void*>(&hook_pickup_dialog));
+    for (const auto& [slot, hook] : slots) {
+        if (!patch_vtable_slot(slot, hook)) {
             return std::format("cannot patch the vtable slot at {:#x}", slot);
         }
-    }
-    auto beacon_use = reinterpret_cast<uintptr_t>(&hook_beacon_use);
-    if (!patch(base + game::build().beacon_use_vtable_slot, &beacon_use, sizeof(beacon_use), PAGE_READWRITE)) {
-        return std::format("cannot patch the vtable slot at {:#x}", game::build().beacon_use_vtable_slot);
-    }
-    auto pickup_dialog = reinterpret_cast<uintptr_t>(&hook_pickup_dialog);
-    if (!patch(base + game::build().pickup_dialog_vtable_slot, &pickup_dialog, sizeof(pickup_dialog), PAGE_READWRITE)) {
-        return std::format("cannot patch the vtable slot at {:#x}", game::build().pickup_dialog_vtable_slot);
     }
     return {};
 }
