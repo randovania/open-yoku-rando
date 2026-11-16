@@ -147,11 +147,12 @@ def test_install_writes_the_category_lines(fake_game_path):
     game_files.install_files(fake_game_path, default_models(), {}, categories)
 
     lines = fake_game_path.joinpath(TEXTS).read_bytes().decode("utf-8").split("\r\n")
-    assert "kickback_2b;Here, take a key as thanks for letting me out!" in lines
-    assert "willo_temple_1b;According to my scrying, some fruit is nearby!" in lines
-    assert "willo_temple_2;Trouble finding the fruit? It should be somewhere below! Look for its magical gleam!" in (
-        lines
-    )
+    assert "kickback_2b;Here, take <style4>a key</style> as thanks for letting me out!" in lines
+    assert "willo_temple_1b;According to my scrying, <style4>some fruit</style> is nearby!" in lines
+    assert (
+        "willo_temple_2;Trouble finding <style4>the fruit</style>? It should be somewhere below! "
+        "Look for its magical gleam!"
+    ) in lines
 
 
 def test_every_category_line_fills_from_the_seeds_categories(shuffled_configuration):

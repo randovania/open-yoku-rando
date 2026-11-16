@@ -223,12 +223,15 @@ class CategoryLine:
     template: str
     """
     The line. `{a_cat}` stands for the category's determiner plus its noun, `{the_cat}` for "the " plus the noun.
+    The filled-in text is highlighted in purple (`style4`).
     Where the game has alternative lines under the key, the DLL sets every one of them to it.
     """
 
     def fill(self, category: dict[str, str]) -> str:
         noun = category["noun"]
-        return self.template.replace("{a_cat}", category["determiner"] + noun).replace("{the_cat}", f"the {noun}")
+        a_cat = f"<style4>{category['determiner']}{noun}</style>"
+        the_cat = f"<style4>the {noun}</style>"
+        return self.template.replace("{a_cat}", a_cat).replace("{the_cat}", the_cat)
 
 
 @functools.cache
