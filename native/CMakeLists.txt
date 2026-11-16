@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(open_yoku_rando VERSION 0.1.0 LANGUAGES CXX)
+project(open_yoku_rando LANGUAGES CXX)
 
 # The DLL reads and grows std::string and std::vector objects owned by Yoku.exe, so it must use the same
 # compiler ABI and the same CRT heap: MSVC, x64, dynamic release CRT, no iterator debugging.
@@ -47,7 +47,14 @@ add_library(open_yoku_rando SHARED
     third_party/imgui/backends/imgui_impl_dx11.cpp
 )
 target_include_directories(open_yoku_rando PRIVATE common third_party/imgui third_party/imgui/backends)
-target_compile_definitions(open_yoku_rando PRIVATE OYR_VERSION="${PROJECT_VERSION}")
+# The version comes from the git tags, like the Python package's, and is refreshed on every build.
+set(VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/oyr_version.h")
+add_custom_target(oyr_version
+    COMMAND ${CMAKE_COMMAND} "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}" "-DOUTPUT=${VERSION_HEADER}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/version.cmake"
+    BYPRODUCTS "${VERSION_HEADER}")
+add_dependencies(open_yoku_rando oyr_version)
+target_include_directories(open_yoku_rando PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(open_yoku_rando PRIVATE IMGUI_DISABLE_WIN32_FUNCTIONS IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS)
 target_link_libraries(open_yoku_rando PRIVATE ws2_32 d3d11 dxgi delayimp)
 target_link_options(open_yoku_rando PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:dxgi.dll /DELAYLOAD:d3dcompiler_47.dll)

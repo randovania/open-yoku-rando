@@ -2,6 +2,7 @@
 #include "hooks.hpp"
 #include "init_codes.hpp"
 #include "log.hpp"
+#include "oyr_version.h"
 #include "remote_api.hpp"
 
 #include <windows.h>
