@@ -35,4 +35,5 @@ and the dynamic release CRT, because it reads and grows `std::string`/`std::vect
 Dear ImGui is a git submodule: clone with `--recurse-submodules`, or run `git submodule update --init` once.
 `native\build.cmd` builds `native\build\open_yoku_rando.dll` and `xinput9_1_0.dll` and copies both into
 `src/open_yoku_rando/files/native/`, where the patcher installs them from. The DLL writes `open_yoku_rando.log` next
-to itself, in `open-yoku-rando/`.
+to itself, in `open-yoku-rando/`, and keeps the logs of the four starts before as `open_yoku_rando.1.log` (newest)
+to `open_yoku_rando.4.log`.
