@@ -75,9 +75,7 @@ def test_install_puts_everything_into_the_mod_folder(fake_game_path):
     assert fake_game_path.joinpath(TARGET).read_bytes() == shipped_bytes()
     assert fake_game_path.joinpath(DLL).is_file()
     assert fake_game_path.joinpath(PROXY).is_file()
-    assert fake_game_path.joinpath(SCRIPTS).read_bytes() == (
-        GAME_SCRIPTS + f"replace_script\t{TUNGUSKA}\t{TUNGUSKA_PATCHED}\r\n".encode()
-    )
+    assert fake_game_path.joinpath(SCRIPTS).read_bytes() == GAME_SCRIPTS + PATCHED_SCRIPT_LINES
 
 
 def test_install_changes_no_file_of_the_game(fake_game_path):
@@ -223,6 +221,22 @@ TUNGUSKA_PATCHED = (
     'function self.talk3() dialogBegin("tunguska") dialogLine(3) triggerOutput("talk3done")'
     ' addItem("tunguska_reward") end'
 )
+PATCHED_SCRIPTS = {
+    TUNGUSKA: TUNGUSKA_PATCHED,
+    "jens_soaring_heights:106": (
+        'function self.run() i = getDrainCount() if i > 4 and isStateSet("scene_3") == 0 then'
+        ' triggerOutput("scene_3") startEvent() triggerOutput("onevent_3") end end'
+    ),
+    "jungle_spikey_stockade:335": (
+        'function self.run() i = getDrainCount() if i > 4 and isStateSet("stage 3 (flee)") == 0 then'
+        ' triggerOutput("set_fx_state_2") elseif i > 0 and i < 5 and isStateSet("stage 2") == 0 then'
+        ' triggerOutput("set_fx_state_1") end end'
+    ),
+}
+"""The fake install's scripts, as the patcher serves them."""
+PATCHED_SCRIPT_LINES = "".join(
+    f"replace_script\t{spawn_id}\t{script}\r\n" for spawn_id, script in PATCHED_SCRIPTS.items()
+).encode()
 
 
 def add_beacon_sources(game_path) -> None:
@@ -245,14 +259,23 @@ def test_object_script_needs_the_object(fake_game_path):
         game_files.object_script(fake_game_path, "peak_filthy_flat:1")
 
 
-def test_patched_object_scripts_gives_tunguska_the_reward(fake_game_path):
-    assert game_files.patched_object_scripts(fake_game_path) == {TUNGUSKA: TUNGUSKA_PATCHED}
+def test_patched_object_scripts_applies_every_patch(fake_game_path):
+    assert game_files.patched_object_scripts(fake_game_path) == PATCHED_SCRIPTS
 
 
-def test_patched_object_scripts_needs_the_anchor_once(fake_game_path, mocker):
-    mocker.patch.dict(game_files.SCRIPT_PATCHES, {TUNGUSKA: ("no such anchor", " addItem(\"x\")")}, clear=True)
+def test_patched_object_scripts_applies_the_replacements_in_order(fake_game_path, mocker):
+    mocker.patch.dict(game_files.SCRIPT_PATCHES, {TUNGUSKA: (("dialogLine(3)", "A"), ("A", "B"))}, clear=True)
 
-    with pytest.raises(ValueError, match="does not have no such anchor"):
+    assert game_files.patched_object_scripts(fake_game_path) == {
+        TUNGUSKA: 'function self.talk3() dialogBegin("tunguska") B triggerOutput("talk3done") end'
+    }
+
+
+@pytest.mark.parametrize("old", ["no such text", "dialog"])
+def test_patched_object_scripts_needs_the_old_text_once(fake_game_path, mocker, old):
+    mocker.patch.dict(game_files.SCRIPT_PATCHES, {TUNGUSKA: ((old, "new"),)}, clear=True)
+
+    with pytest.raises(ValueError, match=f"does not have {old} "):
         game_files.patched_object_scripts(fake_game_path)
 
 

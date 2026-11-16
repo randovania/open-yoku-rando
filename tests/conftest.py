@@ -21,7 +21,44 @@ TUNGUSKA_SCRIPT = (
     '    triggerOutput("talk3done")\n'
     "end\n"
 )
-TUNGUSKA_OBJECT = {"id": 1030, "script": TUNGUSKA_SCRIPT}
+DRAIN_SCRIPT = (
+    "function self.run()\n"
+    "\ti = getDrainCount()\n"
+    "\tif i == 10 then\n"
+    "\t\tstartEvent()\n"
+    '\t\ttriggerOutput("onevent_1")\n'
+    "\t\tfadeOutOverlay(1000)\n"
+    "\t\twait(5000)\n"
+    "\t\tstopEvent()\n"
+    "\telseif i == 30 then\n"
+    "\t\tstartEvent()\n"
+    '\t\ttriggerOutput("onevent_2")\n'
+    "\t\tfadeOutOverlay(1000)\n"
+    "\t\twait(8000)\n"
+    "\t\tstopEvent()\n"
+    '\telseif i > 49 and isStateSet("scene_3") == 0 and i < 61 then\n'
+    '\t\ttriggerOutput("scene_3")\n'
+    "\t\tstartEvent()\n"
+    '\t\ttriggerOutput("onevent_3")\n'
+    "\tend\n"
+    "end\n"
+)
+CAGE_GLOW_SCRIPT = (
+    "function self.run()\n"
+    "\ti = getDrainCount()\n"
+    '\tif i > 30 and isStateSet("stage 3 (flee)") == 0 then\n'
+    '\t\ttriggerOutput("set_fx_state_2")\n'
+    '\telseif i > 10 and i < 31 and isStateSet("stage 2") == 0 then\n'
+    '\t\ttriggerOutput("set_fx_state_1")\n'
+    "\tend\n"
+    "end\n"
+)
+LEVEL_SCRIPTS = {
+    "peak_filthy_flat:1030": TUNGUSKA_SCRIPT,
+    "jens_soaring_heights:106": DRAIN_SCRIPT,
+    "jungle_spikey_stockade:335": CAGE_GLOW_SCRIPT,
+}
+"""The scripts the patcher changes, shortened, by spawn id."""
 
 
 def get_env_or_skip(env_name: str) -> str:
@@ -87,9 +124,12 @@ def fake_game_path(tmp_path) -> Path:
     csv_path.parent.mkdir(parents=True)
     csv_path.write_bytes("\r\n".join(lines).encode("utf-8"))
     scripts_csv_path(game_path).write_bytes(GAME_SCRIPTS)
-    level_path = level_json_path(game_path, "peak_filthy_flat")
-    level_path.parent.mkdir(parents=True)
-    level_path.write_bytes(json.dumps({"objects": [TUNGUSKA_OBJECT]}).encode("utf-8") + b"\0")
+    for spawn_id, script in LEVEL_SCRIPTS.items():
+        level, object_id = spawn_id.split(":")
+        level_path = level_json_path(game_path, level)
+        level_path.parent.mkdir(parents=True)
+        level_object = {"id": int(object_id), "script": script}
+        level_path.write_bytes(json.dumps({"objects": [level_object]}).encode("utf-8") + b"\0")
     # A game file the patcher must leave alone.
     strings_path = game_path.joinpath("processed", "text", "dialog_en.strings")
     strings_path.parent.mkdir(parents=True)
