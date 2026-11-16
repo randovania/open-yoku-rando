@@ -112,9 +112,27 @@ def beacon_hint(required: int) -> str:
 
 SCRIPT_PATCHES = {
     # Tunguska's reward talk, after the sixth clean Sootling
-    "peak_filthy_flat:1030": ('triggerOutput("talk3done")', ' addItem("tunguska_reward")'),
+    "peak_filthy_flat:1030": (
+        ('triggerOutput("talk3done")', 'triggerOutput("talk3done") addItem("tunguska_reward")'),
+    ),
+    # The drain cutscenes
+    "jens_soaring_heights:106": (
+        (
+            (
+                'if i == 10 then startEvent() triggerOutput("onevent_1") fadeOutOverlay(1000) wait(5000) stopEvent()'
+                ' elseif i == 30 then startEvent() triggerOutput("onevent_2") fadeOutOverlay(1000) wait(8000)'
+                ' stopEvent() elseif i > 49 and isStateSet("scene_3") == 0 and i < 61 then'
+            ),
+            'if i > 4 and isStateSet("scene_3") == 0 then',
+        ),
+    ),
+    # Spikey Stockade's cage glow on load, scaled to the 5 drains
+    "jungle_spikey_stockade:335": (
+        ("i > 30 and", "i > 4 and"),
+        ("i > 10 and i < 31 and", "i > 0 and i < 5 and"),
+    ),
 }
-"""Object scripts of the game's levels, by spawn id: (anchor, inserted after it)."""
+"""Object scripts of the game's levels, by spawn id: (old, new) pairs, each old text found exactly once."""
 
 
 def one_line_script(script: str) -> str:
@@ -137,11 +155,13 @@ def object_script(game_path: Path, spawn_id: str) -> str:
 def patched_object_scripts(game_path: Path) -> dict[str, str]:
     """Each of SCRIPT_PATCHES applied to the game's script, on one line, by spawn id."""
     patched = {}
-    for spawn_id, (anchor, insertion) in SCRIPT_PATCHES.items():
+    for spawn_id, replacements in SCRIPT_PATCHES.items():
         script = one_line_script(object_script(game_path, spawn_id))
-        if script.count(anchor) != 1:
-            raise ValueError(f"the script of {spawn_id} does not have {anchor} the way the patcher expects")
-        patched[spawn_id] = script.replace(anchor, anchor + insertion)
+        for old, new in replacements:
+            if script.count(old) != 1:
+                raise ValueError(f"the script of {spawn_id} does not have {old} the way the patcher expects")
+            script = script.replace(old, new)
+        patched[spawn_id] = script
     return patched
 
 
